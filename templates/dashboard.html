@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - ShellSentry{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <div class="dashboard-header">
+        <h2>Command Execution Dashboard</h2>
+        <p>Describe what you want to do in plain English, and ShellSentry will execute it securely on remote servers.</p>
+    </div>
+
+    <div class="command-panel">
+        <div class="command-input-section">
+            <h3>Enter Your Request</h3>
+            <form id="commandForm" class="command-form">
+                <div class="form-group">
+                    <label for="command">Natural Language Command</label>
+                    <textarea 
+                        id="command" 
+                        name="command" 
+                        rows="4" 
+                        placeholder="e.g., Show active connections on the server"
+                        required
+                    ></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="servers">Target Servers (leave empty for all configured servers)</label>
+                    <input 
+                        type="text" 
+                        id="servers" 
+                        name="servers" 
+                        placeholder="server1.example.com, server2.example.com"
+                    >
+                    <small>Comma-separated list of server hostnames or IPs</small>
+                </div>
+                
+                <button type="submit" class="btn btn-primary btn-large" id="executeBtn">
+                    <span class="btn-text">Execute Command</span>
+                    <span class="btn-loader" style="display: none;">⏳ Processing...</span>
+                </button>
+            </form>
+        </div>
+
+        <div class="results-section" id="resultsSection" style="display: none;">
+            <h3>Execution Results</h3>
+            <div id="resultsContainer"></div>
+        </div>
+    </div>
+
+    <div class="examples-section">
+        <h3>Example Commands</h3>
+        <div class="examples-grid">
+            <div class="example-card" onclick="fillExample('Show active connections on the server')">
+                <strong>Network Connections</strong>
+                <p>Show active connections on the server</p>
+            </div>
+            <div class="example-card" onclick="fillExample('Check if 192.168.56.1 is alive')">
+                <strong>Ping Test</strong>
+                <p>Check if 192.168.56.1 is alive</p>
+            </div>
+            <div class="example-card" onclick="fillExample('Show disk storage usage on all machines')">
+                <strong>Disk Usage</strong>
+                <p>Show disk storage usage on all machines</p>
+            </div>
+            <div class="example-card" onclick="fillExample('Display network interfaces')">
+                <strong>Network Interfaces</strong>
+                <p>Display network interfaces</p>
+            </div>
+            <div class="example-card" onclick="fillExample('Show system uptime')">
+                <strong>System Uptime</strong>
+                <p>Show system uptime</p>
+            </div>
+            <div class="example-card" onclick="fillExample('List running processes')">
+                <strong>Running Processes</strong>
+                <p>List running processes</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}
+
