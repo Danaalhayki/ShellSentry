@@ -68,7 +68,7 @@ Now convert this request to a Bash command:"""
             }
     
     def _call_openai_api(self, system_prompt, user_prompt):
-        """Call OpenAI API"""
+        """Call OpenAI API with retry logic"""
         headers = {
             'Authorization': f'Bearer {self.api_key}',
             'Content-Type': 'application/json'
@@ -84,12 +84,47 @@ Now convert this request to a Bash command:"""
             'max_tokens': 500
         }
         
-        response = requests.post(
-            f'{self.api_base}/chat/completions',
-            headers=headers,
-            json=payload,
-            timeout=30
-        )
+        # Retry logic for network issues
+        max_retries = 3
+        retry_delay = 1  # seconds
+        
+        for attempt in range(max_retries):
+            try:
+                response = requests.post(
+                    f'{self.api_base}/chat/completions',
+                    headers=headers,
+                    json=payload,
+                    timeout=60  # Increased timeout
+                )
+                break  # Success, exit retry loop
+            except requests.exceptions.Timeout:
+                if attempt < max_retries - 1:
+                    logger.warning(f"LLM API timeout (attempt {attempt + 1}/{max_retries}), retrying...")
+                    time.sleep(retry_delay * (attempt + 1))  # Exponential backoff
+                    continue
+                else:
+                    logger.error("LLM API timeout after all retries")
+                    return {
+                        'success': False,
+                        'error': 'Request timeout: LLM API did not respond in time'
+                    }
+            except requests.exceptions.ConnectionError as e:
+                if attempt < max_retries - 1:
+                    logger.warning(f"LLM API connection error (attempt {attempt + 1}/{max_retries}): {str(e)}, retrying...")
+                    time.sleep(retry_delay * (attempt + 1))
+                    continue
+                else:
+                    logger.error(f"LLM API connection error after all retries: {str(e)}")
+                    return {
+                        'success': False,
+                        'error': f'Connection error: {str(e)}'
+                    }
+            except requests.exceptions.RequestException as e:
+                logger.error(f"LLM API request error: {str(e)}")
+                return {
+                    'success': False,
+                    'error': f'Request error: {str(e)}'
+                }
         
         if response.status_code == 200:
             data = response.json()

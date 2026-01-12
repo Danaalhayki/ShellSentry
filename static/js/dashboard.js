@@ -30,6 +30,10 @@ document.getElementById('commandForm').addEventListener('submit', async function
     const servers = serversInput ? serversInput.split(',').map(s => s.trim()).filter(s => s) : [];
     
     try {
+        // Add timeout to fetch request
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
+        
         const response = await fetch('/api/execute', {
             method: 'POST',
             headers: {
@@ -38,8 +42,11 @@ document.getElementById('commandForm').addEventListener('submit', async function
             body: JSON.stringify({
                 command: commandInput,
                 servers: servers
-            })
+            }),
+            signal: controller.signal
         });
+        
+        clearTimeout(timeoutId);
         
         const data = await response.json();
         
@@ -56,21 +63,31 @@ document.getElementById('commandForm').addEventListener('submit', async function
         
     } catch (error) {
         console.error('Error:', error);
-        const errorMessage = error.message.replace(/\n/g, '<br>');
+        let errorMessage = error.message;
+        
+        // Provide more specific error messages
+        if (error.name === 'AbortError' || error.message.includes('timeout')) {
+            errorMessage = 'Request timeout: The server took too long to respond. Please try again.';
+        } else if (error.message === 'Failed to fetch' || error.message.includes('NetworkError')) {
+            errorMessage = 'Network error: Could not connect to the server. Please check your connection and try again.';
+        }
+        
         resultsContainer.innerHTML = `
             <div class="result-card">
                 <div class="result-card-header">
                     <span class="result-server">Error</span>
                     <span class="result-status error">Failed</span>
                 </div>
-                <div class="result-error">${escapeHtml(error.message).replace(/\n/g, '<br>')}</div>
+                <div class="result-error">${escapeHtml(errorMessage).replace(/\n/g, '<br>')}</div>
                 <div style="margin-top: 1rem; padding: 1rem; background-color: #fef3c7; border-radius: 0.5rem;">
                     <strong>💡 Troubleshooting Tips:</strong>
                     <ul style="margin-top: 0.5rem; margin-left: 1.5rem;">
+                        <li>Check your internet connection</li>
+                        <li>Verify the Flask server is running</li>
                         <li>Check if LLM_API_KEY is correctly set in your .env file</li>
                         <li>Verify your API key is valid and has credits/quota</li>
-                        <li>Check your internet connection</li>
-                        <li>For OpenAI: Ensure you have an active account at platform.openai.com</li>
+                        <li>Try refreshing the page and submitting again</li>
+                        <li>Check server logs for detailed error messages</li>
                     </ul>
                 </div>
             </div>

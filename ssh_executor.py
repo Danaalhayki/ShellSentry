@@ -1,5 +1,6 @@
 import paramiko
 import os
+import socket
 from logger import setup_logger
 from config import Config
 from models import db, ExecutionLog
@@ -69,11 +70,11 @@ class SSHExecutor:
             ssh = paramiko.SSHClient()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             
-            # Connect to server
+            # Connect to server with retry logic
             connect_kwargs = {
                 'hostname': server,
                 'username': self.ssh_user or 'root',
-                'timeout': 10,
+                'timeout': 30,  # Increased timeout
                 'look_for_keys': False,  # Disable auto-detection to avoid DSA keys
                 'allow_agent': False     # Disable agent to avoid DSA keys
             }
@@ -114,10 +115,23 @@ class SSHExecutor:
                 # Try password authentication (not recommended)
                 logger.warning(f"No SSH key found, attempting password auth for {server}")
             
-            ssh.connect(**connect_kwargs)
+            # Retry connection logic
+            max_retries = 2
+            for attempt in range(max_retries):
+                try:
+                    ssh.connect(**connect_kwargs)
+                    break  # Success, exit retry loop
+                except (paramiko.SSHException, Exception) as e:
+                    if attempt < max_retries - 1:
+                        logger.warning(f"SSH connection attempt {attempt + 1}/{max_retries} failed for {server}: {str(e)}, retrying...")
+                        import time
+                        time.sleep(1)
+                        continue
+                    else:
+                        raise
             
-            # Execute command
-            stdin, stdout, stderr = ssh.exec_command(command, timeout=30)
+            # Execute command with increased timeout
+            stdin, stdout, stderr = ssh.exec_command(command, timeout=60)
             
             # Wait for command to complete
             exit_code = stdout.channel.recv_exit_status()
@@ -143,21 +157,39 @@ class SSHExecutor:
                 'exit_code': -1
             }
         except paramiko.SSHException as e:
-            logger.error(f"SSH error for {server}: {str(e)}")
+            error_msg = str(e)
+            logger.error(f"SSH error for {server}: {error_msg}")
+            # Provide more helpful error messages
+            if 'timeout' in error_msg.lower():
+                error_msg = f'Connection timeout: Server {server} did not respond'
+            elif 'name resolution' in error_msg.lower() or 'could not resolve' in error_msg.lower():
+                error_msg = f'DNS resolution failed: Could not resolve {server}'
+            elif 'no route to host' in error_msg.lower():
+                error_msg = f'Network unreachable: Cannot reach {server}'
             return {
                 'success': False,
-                'error': f'SSH error: {str(e)}',
+                'error': f'SSH error: {error_msg}',
                 'stdout': '',
-                'stderr': str(e),
+                'stderr': error_msg,
+                'exit_code': -1
+            }
+        except socket.timeout:
+            logger.error(f"Connection timeout for {server}")
+            return {
+                'success': False,
+                'error': f'Connection timeout: Server {server} did not respond in time',
+                'stdout': '',
+                'stderr': 'Connection timeout',
                 'exit_code': -1
             }
         except Exception as e:
-            logger.error(f"Unexpected error for {server}: {str(e)}")
+            error_msg = str(e)
+            logger.error(f"Unexpected error for {server}: {error_msg}", exc_info=True)
             return {
                 'success': False,
-                'error': str(e),
+                'error': f'Unexpected error: {error_msg}',
                 'stdout': '',
-                'stderr': str(e),
+                'stderr': error_msg,
                 'exit_code': -1
             }
         finally:

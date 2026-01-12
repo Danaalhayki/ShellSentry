@@ -179,6 +179,16 @@ def get_servers():
     servers = app.config['REMOTE_SERVERS']
     return jsonify({'servers': servers})
 
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """Health check endpoint"""
+    return jsonify({
+        'status': 'healthy',
+        'llm_configured': bool(app.config['LLM_API_KEY']),
+        'ssh_configured': bool(app.config['SSH_USER']),
+        'servers_configured': len(app.config['REMOTE_SERVERS']) > 0
+    })
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
 
