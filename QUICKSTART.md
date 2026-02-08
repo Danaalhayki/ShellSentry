@@ -48,7 +48,7 @@ python app.py
 
 Open your browser and navigate to:
 ```
-http://localhost:5000
+http://localhost:5001
 ```
 
 ## 6. Login
@@ -86,7 +86,7 @@ Try these example commands:
 
 ### Port Already in Use
 - Change port in `app.py` or `run.py`
-- Or kill the process using port 5000
+- Or kill the process using port 5001
 
 ## Security Checklist
 
