@@ -1,16 +1,21 @@
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
-from models import db, User
-from auth import register_user, authenticate_user
-from security import SecurityLayer
-from llm_client import LLMClient
-from command_validator import CommandValidator
-from ssh_executor import SSHExecutor
-from logger import setup_logger
+from .models import db, User
+from .auth import register_user, authenticate_user
+from .security import SecurityLayer
+from .llm_client import LLMClient
+from .command_validator import CommandValidator
+from .ssh_executor import SSHExecutor
+from .logger import setup_logger
 import os
 
-app = Flask(__name__)
-app.config.from_object('config.Config')
+# Get the project root directory (parent of src)
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+app = Flask(__name__, 
+            template_folder=os.path.join(project_root, 'templates'),
+            static_folder=os.path.join(project_root, 'static'))
+app.config.from_object('src.config.Config')
 
 # Initialize extensions
 db.init_app(app)
@@ -188,7 +193,8 @@ def health_check():
         'ssh_configured': bool(app.config['SSH_USER']),
         'servers_configured': len(app.config['REMOTE_SERVERS']) > 0
     })
-
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5001)
+ 
+# Note:
+# - Use `python run.py` for local development.
+# - `app` is intentionally importable for WSGI servers and tooling.
 

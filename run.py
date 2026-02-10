@@ -2,7 +2,7 @@
 """
 Simple script to run the ShellSentry application
 """
-from app import app
+from src.app import app
 
 if __name__ == '__main__':
     print("=" * 60)

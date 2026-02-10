@@ -1,9 +1,9 @@
 import paramiko
 import os
 import socket
-from logger import setup_logger
-from config import Config
-from models import db, ExecutionLog
+from .logger import setup_logger
+from .config import Config
+from .models import db, ExecutionLog
 
 logger = setup_logger()
 

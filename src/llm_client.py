@@ -1,9 +1,9 @@
-import os
 import json
 import re
+import time
 import requests
-from logger import setup_logger
-from config import Config
+from .logger import setup_logger
+from .config import Config
 
 logger = setup_logger()
 

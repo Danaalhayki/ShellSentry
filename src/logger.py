@@ -1,7 +1,5 @@
 import logging
-import os
-from datetime import datetime
-from config import Config
+from .config import Config
 
 def setup_logger(name='ShellSentry', log_file='shellsentry.log'):
     """

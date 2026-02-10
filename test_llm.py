@@ -2,8 +2,8 @@
 """
 Test script to diagnose LLM API connection issues
 """
-from config import Config
-from llm_client import LLMClient
+from src.config import Config
+from src.llm_client import LLMClient
 import sys
 
 def test_llm_connection():
@@ -16,9 +16,6 @@ def test_llm_connection():
     # Check configuration
     print("[*] Configuration Check:")
     print(f"  LLM_API_KEY: {'[OK] SET' if Config.LLM_API_KEY else '[ERROR] NOT SET'}")
-    if Config.LLM_API_KEY:
-        key_preview = Config.LLM_API_KEY[:10] + "..." + Config.LLM_API_KEY[-4:] if len(Config.LLM_API_KEY) > 14 else "***"
-        print(f"    Preview: {key_preview}")
     print(f"  LLM_API_BASE_URL: {Config.LLM_API_BASE_URL}")
     print(f"  LLM_MODEL: {Config.LLM_MODEL}")
     print(f"  LLM_API_TYPE: {Config.LLM_API_TYPE}")

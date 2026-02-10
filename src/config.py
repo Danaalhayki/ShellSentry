@@ -11,9 +11,10 @@ class Config:
     
     # LLM Configuration
     LLM_API_TYPE = os.environ.get('LLM_API_TYPE', 'openai')
-    LLM_API_KEY = os.environ.get('LLM_API_KEY', '')
-    LLM_API_BASE_URL = os.environ.get('LLM_API_BASE_URL', 'https://api.openai.com/v1')
-    LLM_MODEL = os.environ.get('LLM_MODEL', 'gpt-3.5-turbo')
+    LLM_API_KEY = os.environ.get('LLM_API_KEY', 'api_key')
+    # Default to Groq's OpenAI-compatible endpoint (override in .env if needed)
+    LLM_API_BASE_URL = os.environ.get('LLM_API_BASE_URL', 'https://api.groq.com/openai/v1')
+    LLM_MODEL = os.environ.get('LLM_MODEL', 'llama-3.1-8b-instant')
     
     # SSH Configuration
     SSH_USER = os.environ.get('SSH_USER', '')

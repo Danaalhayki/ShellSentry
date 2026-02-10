@@ -1,8 +1,8 @@
 import os
 import re
 import shlex
-from logger import setup_logger
-from config import Config
+from .logger import setup_logger
+from .config import Config
 
 logger = setup_logger()
 

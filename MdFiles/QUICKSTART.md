@@ -39,11 +39,6 @@ Update `SSH_KEY_PATH` in `.env` if your key is in a non-standard location.
 python run.py
 ```
 
-Or:
-```bash
-python app.py
-```
-
 ## 5. Access the Application
 
 Open your browser and navigate to:

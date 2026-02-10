@@ -27,50 +27,23 @@ User → Web Interface → Security Layer → LLM API → Command Validator → 
 - LLM API key (OpenAI or compatible API)
 - SSH key for remote server authentication
 
-## Installation
+## Quick Start
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd ShellSentry
-   ```
+For detailed setup instructions, see [QUICKSTART.md](QUICKSTART.md).
 
-2. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+**Basic Setup:**
+1. Install dependencies: `pip install -r requirements.txt`
+2. Copy `env.example` to `.env` and configure it
+3. Set up LLM (see [LLM_SETUP.md](LLM_SETUP.md))
+4. Configure SSH access
+5. Run: `python run.py`
 
-3. **Configure environment variables**
-   ```bash
-   cp .env.example .env
-   ```
-   
-   Edit `.env` and configure:
-   - `SECRET_KEY`: Flask secret key (generate a strong random key)
-   - `LLM_API_KEY`: Your OpenAI or compatible API key
-   - `LLM_API_BASE_URL`: API endpoint URL
-   - `LLM_MODEL`: Model name (e.g., `gpt-3.5-turbo`)
-   - `SSH_USER`: SSH username for remote servers
-   - `SSH_KEY_PATH`: Path to SSH private key
-   - `REMOTE_SERVERS`: Comma-separated list of server hostnames/IPs
+**Default Admin Credentials:**
+- Username: `admin`
+- Password: `admin123`
+- **⚠️ IMPORTANT**: Change the default password immediately after first login!
 
-4. **Initialize the database**
-   ```bash
-   python app.py
-   ```
-   
-   The application will automatically create the database and a default admin user:
-   - Username: `admin`
-   - Password: `admin123`
-   
-   **⚠️ IMPORTANT**: Change the default password immediately!
-
-5. **Run the application**
-   ```bash
-   python app.py
-   ```
-   
-   The application will be available at `http://localhost:5001`
+The application will be available at `http://localhost:5001`
 
 ## Usage
 
@@ -101,26 +74,33 @@ User → Web Interface → Security Layer → LLM API → Command Validator → 
 - SSH agent support
 - Secure connection handling
 
+## Documentation
+
+- **[QUICKSTART.md](QUICKSTART.md)** - Quick start guide with step-by-step setup
+- **[LLM_SETUP.md](LLM_SETUP.md)** - Comprehensive guide for setting up LLM (local or cloud)
+- **[projectDescription.md](projectDescription.md)** - Detailed project description and architecture
+
 ## Configuration
 
-### Environment Variables
+See [QUICKSTART.md](QUICKSTART.md) for detailed configuration instructions.
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `SECRET_KEY` | Flask secret key | Required |
-| `LLM_API_KEY` | LLM API key | Required |
-| `LLM_API_BASE_URL` | API base URL | `https://api.openai.com/v1` |
-| `LLM_MODEL` | Model name | `gpt-3.5-turbo` |
-| `SSH_USER` | SSH username | Required |
-| `SSH_KEY_PATH` | SSH key path | `~/.ssh/id_rsa` |
-| `REMOTE_SERVERS` | Comma-separated servers | Required |
-| `ALLOW_ROOT_EXECUTION` | Allow sudo/root commands | `false` |
+**Key Environment Variables:**
+- `SECRET_KEY` - Flask secret key (generate with: `python -c "import secrets; print(secrets.token_hex(32))"`)
+- `LLM_API_KEY` - LLM API key (see [LLM_SETUP.md](LLM_SETUP.md))
+- `LLM_API_BASE_URL` - API endpoint URL
+- `LLM_MODEL` - Model name
+- `SSH_USER` - SSH username for remote servers
+- `SSH_KEY_PATH` - Path to SSH private key (default: `~/.ssh/id_rsa`)
+- `REMOTE_SERVERS` - Comma-separated list of server hostnames/IPs
+- `ALLOW_ROOT_EXECUTION` - Allow sudo/root commands (default: `false`)
 
 ## Project Structure
 
 ```
 ShellSentry/
 ├── app.py                 # Main Flask application
+├── run.py                 # Application runner with startup info
+├── test_llm.py            # LLM connection diagnostic tool
 ├── config.py              # Configuration management
 ├── models.py              # Database models
 ├── auth.py                # Authentication functions
@@ -130,6 +110,7 @@ ShellSentry/
 ├── ssh_executor.py        # SSH remote execution
 ├── logger.py              # Logging setup
 ├── requirements.txt       # Python dependencies
+├── env.example            # Environment variable template
 ├── templates/             # HTML templates
 │   ├── base.html
 │   ├── login.html
