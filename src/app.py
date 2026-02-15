@@ -145,6 +145,9 @@ def execute_command():
                 'generated_command': generated_command
             }), 400
         
+        # Normalize command for execution (strip shebang so shell does not try to run !/bin/bash etc.)
+        command_to_run = command_validator.normalize_for_execution(generated_command)
+        
         # Step 4: Remote Execution
         if not target_servers:
             target_servers = app.config['REMOTE_SERVERS']
@@ -156,7 +159,7 @@ def execute_command():
             }), 400
         
         execution_results = ssh_executor.execute_on_servers(
-            generated_command,
+            command_to_run,
             target_servers,
             current_user.username,
             current_user.id,
@@ -169,7 +172,7 @@ def execute_command():
         return jsonify({
             'success': True,
             'original_request': natural_language,
-            'generated_command': generated_command,
+            'generated_command': command_to_run,
             'results': execution_results
         })
         

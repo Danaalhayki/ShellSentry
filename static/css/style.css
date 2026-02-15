@@ -593,6 +593,11 @@ main {
     color: var(--text-color);
 }
 
+.generated-command code {
+    white-space: pre-wrap;
+    display: block;
+}
+
 /* Examples Section */
 .examples-section {
     background-color: var(--card-bg);

@@ -141,6 +141,11 @@ class SSHExecutor:
                         raise
             
             # Execute command with increased timeout
+            # Use heredoc for multi-line scripts so the remote shell receives the full script
+            # without quoting/truncation issues (avoids "syntax error near unexpected token 'done'")
+            if '\n' in command:
+                heredoc_marker = 'SHELLSENTRY_EOF'
+                command = f"bash -s << '{heredoc_marker}'\n{command}\n{heredoc_marker}"
             stdin, stdout, stderr = ssh.exec_command(command, timeout=60)
             
             # Wait for command to complete

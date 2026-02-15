@@ -156,6 +156,12 @@ class CommandValidator:
             r'telinit\s+6',            # telinit 6
         ]
         
+        # Shebang patterns to strip before execution (so shell does not try to run them as commands)
+        self._shebang_patterns = [
+            re.compile(r'^\s*#!\s*\S+.*$', re.MULTILINE),
+            re.compile(r'^\s*!/bin/(ba)?sh\s*.*$', re.MULTILINE),
+        ]
+
         # Commands that require special validation
         self.restricted_commands = {
             'rm': self._validate_rm,
@@ -184,6 +190,10 @@ class CommandValidator:
         command = re.sub(r'#.*$', '', command, flags=re.MULTILINE)
         command = command.strip()
         
+        # Remove shebang line(s) at the start (e.g. #!/bin/bash or !/bin/bash) so they are not validated as commands
+        command = self._strip_shebang(command)
+        command = command.strip()
+        
         # Remove surrounding quotes if present
         if (command.startswith('"') and command.endswith('"')) or (command.startswith("'") and command.endswith("'")):
             command = command[1:-1].strip()
@@ -199,6 +209,7 @@ class CommandValidator:
         
         # Parse command to get the base command
         try:
+            control_keywords = self._get_shell_control_keywords()
             # Split by ;, &&, ||, |, & to check each part
             parts = re.split(r'[;&|]|\|\||&&', command)
             
@@ -207,11 +218,22 @@ class CommandValidator:
                 if not part:
                     continue
                 
-                # Extract the first word (command)
-                first_word = part.split()[0] if part.split() else ''
-                
-                # Remove any path prefixes
+                tokens = part.split()
+                first_word = tokens[0] if tokens else ''
                 base_command = os.path.basename(first_word)
+                
+                # Skip variable assignments (e.g. MACHINES=("m1" "m2") or FOO=bar)
+                if first_word and '=' in first_word and not first_word.startswith('-'):
+                    continue
+                
+                # If part starts with a control-structure keyword (for, do, done, etc.)
+                if base_command in control_keywords:
+                    # 'do' and 'then' are followed by the actual command to run
+                    if base_command in ('do', 'then', 'else', 'elif') and len(tokens) > 1:
+                        base_command = os.path.basename(tokens[1])
+                    else:
+                        # No executable in this part (e.g. "for ...", "done")
+                        continue
                 
                 # Check if command is in whitelist
                 if base_command not in self.whitelist:
@@ -236,6 +258,38 @@ class CommandValidator:
         
         return {'valid': True}
     
+    def _strip_shebang(self, command):
+        """Remove shebang line(s) from the start of a command/script."""
+        if not command or not command.strip():
+            return command
+        result = command
+        for pattern in self._shebang_patterns:
+            result = pattern.sub('', result)
+        return result.strip()
+
+    def normalize_for_execution(self, command):
+        """
+        Return a command with shebang lines removed and surrounding quotes stripped,
+        suitable for passing to the shell. Prevents the remote from trying to run
+        a single token like "ps aux" (command not found) instead of ps with args.
+        """
+        if not command or not command.strip():
+            return command
+        command = self._strip_shebang(command)
+        # Strip one level of surrounding quotes so "ps aux" -> ps aux (remote runs ps with arg aux)
+        c = command.strip()
+        if len(c) >= 2 and ((c[0] == '"' and c[-1] == '"') or (c[0] == "'" and c[-1] == "'")):
+            command = c[1:-1]
+        return command
+
+    def _get_shell_control_keywords(self):
+        """Shell control-structure keywords (allowed in compound commands)."""
+        return {
+            'for', 'do', 'done', 'while', 'until',
+            'if', 'then', 'else', 'elif', 'fi',
+            'case', 'esac', 'in',  # 'in' for for/case
+        }
+
     def _is_safe_builtin(self, command):
         """Check if command is a safe shell builtin"""
         safe_builtins = [
