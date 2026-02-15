@@ -11,7 +11,13 @@ class SSHExecutor:
     """Handles SSH-based remote command execution"""
     
     def __init__(self):
-        self.ssh_user = Config.SSH_USER
+        # Parse SSH_USER - can be in format "username@hostname" or just "username"
+        ssh_user_raw = Config.SSH_USER or ''
+        if '@' in ssh_user_raw:
+            self.ssh_user = ssh_user_raw.split('@')[0]
+        else:
+            self.ssh_user = ssh_user_raw
+        self.ssh_password = Config.SSH_PASSWORD
         self.ssh_key_path = os.path.expanduser(Config.SSH_KEY_PATH)
         self.ssh_agent_socket = Config.SSH_AGENT_SOCKET
     
@@ -111,6 +117,10 @@ class SSHExecutor:
             elif self.ssh_agent_socket:
                 # Use SSH agent
                 connect_kwargs['allow_agent'] = True
+            elif self.ssh_password:
+                # Use password authentication
+                connect_kwargs['password'] = self.ssh_password
+                logger.info(f"Using password authentication for {server}")
             else:
                 # Try password authentication (not recommended)
                 logger.warning(f"No SSH key found, attempting password auth for {server}")
