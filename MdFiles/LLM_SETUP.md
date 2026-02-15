@@ -137,6 +137,8 @@ LLM_MODEL=llama3.2:1b  # Use the model you downloaded
 
 ## Configuration Summary
 
+Configuration is read from the project root `.env` file (used by `src/config.py`).
+
 ### For Local Ollama:
 ```env
 LLM_API_TYPE=openai

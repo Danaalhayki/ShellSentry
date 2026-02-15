@@ -15,8 +15,9 @@ cp env.example .env
 
 Edit `.env` and set at minimum:
 - `SECRET_KEY`: Generate a random secret key (you can use: `python -c "import secrets; print(secrets.token_hex(32))"`)
-- `LLM_API_KEY`: Your OpenAI API key (or compatible API)
-- `SSH_USER`: Your SSH username
+- `LLM_API_KEY`: Your LLM API key (or use `ollama` for local Ollama; see [LLM_SETUP.md](LLM_SETUP.md))
+- `SSH_USER`: Your SSH username for remote servers
+- `SSH_PASSWORD` or `SSH_KEY_PATH`: Password or path to SSH private key for authentication
 - `REMOTE_SERVERS`: Comma-separated list of servers (e.g., `server1.com,server2.com`)
 
 ## 3. Set Up SSH Access
@@ -70,9 +71,9 @@ Try these example commands:
 - Ensure you have API credits/quota
 
 ### SSH Connection Issues
-- Verify SSH key path is correct
+- Verify `SSH_KEY_PATH` or `SSH_PASSWORD` in `.env`
 - Test SSH connection manually: `ssh user@server`
-- Check that SSH agent is running if using agent authentication
+- If using SSH agent, set `SSH_AGENT_SOCKET` in `.env`
 - Ensure remote servers are accessible
 
 ### Database Issues
@@ -80,7 +81,7 @@ Try these example commands:
 - Check file permissions
 
 ### Port Already in Use
-- Change port in `app.py` or `run.py`
+- Change the port in `run.py` (last line: `app.run(..., port=5001)`)
 - Or kill the process using port 5001
 
 ## Security Checklist

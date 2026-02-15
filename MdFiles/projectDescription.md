@@ -1,7 +1,7 @@
 LLM-to-Bash: A Secure Natural Language Interface for Remote Command Execution
 Project Description
 LLM-to-Bash is a web-based system designed to translate natural language requests into Linux Bash commands or scripts and execute them securely on remote machines. The project aims to simplify remote system administration tasks while maintaining strict security controls, making it suitable for cybersecurity-focused environments.
-The system allows authenticated users to describe the task they want to execute on one or more remote servers using plain English. A Large Language Model (LLM), such as LLaMA accessed via an API, interprets the user’s request and generates the appropriate Bash command or script. The generated command is then validated and executed remotely using secure SSH agent-based authentication, and the execution results are returned to the user through the web interface.
+The system allows authenticated users to describe the task they want to execute on one or more remote servers using plain English. A Large Language Model (LLM), accessed via an OpenAI-compatible API (e.g. OpenAI, Groq, Ollama), interprets the user’s request and generates the appropriate Bash command or script. The generated command is then validated and executed remotely using SSH (Paramiko) with key-based or password authentication, and the execution results are returned to the user through the web interface.
 
 Motivation
 System administrators and cybersecurity professionals often need to perform repetitive or complex Bash commands across multiple machines. These tasks require strong command-line knowledge and increase the risk of human error. By leveraging LLMs, this project introduces an intelligent and user-friendly interface that reduces complexity while preserving security and control over remote execution.
@@ -27,7 +27,7 @@ The user submits a request describing the desired action, such as:
 3. Input Validation
 The system first analyzes the user’s request to detect malicious intent, prohibited keywords, or unsafe operations. This step protects against prompt-based attacks and abuse of the LLM.
 4. LLM Processing
-The validated request is sent to the LLaMA model through an API. The LLM converts the natural language input into:
+The validated request is sent to the LLM through an OpenAI-compatible API. The LLM converts the natural language input into:
 A single Bash command for simple requests, or
 
 
@@ -43,8 +43,8 @@ Blacklist rules for forbidden or dangerous commands
  This ensures that even if the LLM generates unsafe output, it will not be executed.
 
 
-6. Remote Execution via SSH Agent
-Validated commands are executed on one or multiple remote machines using SSH agent-based authentication (SSH Raven). The system supports both normal user and root-level execution, depending on configured permissions.
+6. Remote Execution via SSH
+Validated commands are executed on one or multiple remote machines using SSH (Paramiko) with key-based or password authentication. The system supports both normal user and root-level execution, depending on configured permissions.
 7. Result Collection
 The execution output (standard output, standard error, and exit status) is collected and returned to the user through the web interface in a readable format.
 
@@ -94,7 +94,7 @@ Input sanitization to prevent prompt injection
 LLM output validation (whitelist and blacklist)
 
 
-SSH key-based agent authentication
+SSH key-based or password authentication (Paramiko)
 
 
 Controlled execution scope (user-level or root-level)
@@ -105,19 +105,19 @@ Logging of user actions and executed commands
 
 
 Technologies Used
-Backend: Python
+Backend: Python (Flask)
 
 
-Frontend: Web-based interface (to be specified)
+Frontend: Web-based interface (HTML/CSS/JavaScript templates)
 
 
-LLM: LLaMA via API
+LLM: OpenAI-compatible APIs (OpenAI, Groq, Ollama, etc.)
 
 
-Remote Access: SSH agent (SSH Raven)
+Remote Access: Paramiko (SSH)
 
 
-Operating System: Linux-based servers
+Operating System: Linux-based servers (remote targets)
 
 
 
@@ -195,8 +195,9 @@ High-Level Architecture (Text Diagram)
            | Valid Request
            v
 +---------------------+
-|    LLM API (LLaMA)  |
-| Natural Language →  |
+| LLM API (OpenAI-    |
+| compatible)         |
+| Natural Language → |
 | Bash Command/Script |
 +----------+----------+
            |
@@ -212,8 +213,9 @@ High-Level Architecture (Text Diagram)
            | Approved Command
            v
 +---------------------+
-| SSH Agent (Raven)   |
-| Secure Authentication|
+| SSH Executor        |
+| (Paramiko)          |
+| Key/Password Auth   |
 +----------+----------+
            |
            | Execute Command
@@ -253,7 +255,7 @@ LLM API (LLaMA): Converts natural language into Bash commands or scripts.
 Command Validator: Ensures generated commands are safe and permitted.
 
 
-SSH Agent (Raven): Handles secure authentication and remote execution.
+SSH Executor (Paramiko): Handles secure authentication (key or password) and remote execution.
 
 
 Remote Servers: Linux-based machines where commands are executed.
@@ -276,7 +278,7 @@ Natural Language Processing
 Enable users to describe system tasks using plain English.
 
 
-Translate user requests into Bash commands or scripts using LLaMA.
+Translate user requests into Bash commands or scripts using an LLM (OpenAI-compatible API).
 
 
 Security & Validation

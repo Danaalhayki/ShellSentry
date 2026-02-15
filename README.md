@@ -23,19 +23,18 @@ User → Web Interface → Security Layer → LLM API → Command Validator → 
 ## Prerequisites
 
 - Python 3.8+
-- SSH access to remote Linux servers
-- LLM API key (OpenAI or compatible API)
-- SSH key for remote server authentication
+- SSH access to remote Linux servers (key-based or password authentication)
+- LLM API key or local LLM (OpenAI-compatible API; see [LLM_SETUP.md](MdFiles/LLM_SETUP.md))
 
 ## Quick Start
 
-For detailed setup instructions, see [QUICKSTART.md](QUICKSTART.md).
+For detailed setup instructions, see [QUICKSTART.md](MdFiles/QUICKSTART.md).
 
 **Basic Setup:**
 1. Install dependencies: `pip install -r requirements.txt`
 2. Copy `env.example` to `.env` and configure it
-3. Set up LLM (see [LLM_SETUP.md](LLM_SETUP.md))
-4. Configure SSH access
+3. Set up LLM (see [LLM_SETUP.md](MdFiles/LLM_SETUP.md))
+4. Configure SSH access (key or password)
 5. Run: `python run.py`
 
 **Default Admin Credentials:**
@@ -70,26 +69,28 @@ The application will be available at `http://localhost:5001`
 - Prevents execution of destructive commands
 
 ### SSH Security
-- Key-based authentication
-- SSH agent support
+- Key-based or password authentication (Paramiko)
+- Optional SSH agent via `SSH_AGENT_SOCKET`
 - Secure connection handling
 
 ## Documentation
 
-- **[QUICKSTART.md](QUICKSTART.md)** - Quick start guide with step-by-step setup
-- **[LLM_SETUP.md](LLM_SETUP.md)** - Comprehensive guide for setting up LLM (local or cloud)
-- **[projectDescription.md](projectDescription.md)** - Detailed project description and architecture
+- **[QUICKSTART.md](MdFiles/QUICKSTART.md)** - Quick start guide with step-by-step setup
+- **[LLM_SETUP.md](MdFiles/LLM_SETUP.md)** - Comprehensive guide for setting up LLM (local or cloud)
+- **[projectDescription.md](MdFiles/projectDescription.md)** - Detailed project description and architecture
 
 ## Configuration
 
-See [QUICKSTART.md](QUICKSTART.md) for detailed configuration instructions.
+See [QUICKSTART.md](MdFiles/QUICKSTART.md) for detailed configuration instructions.
 
 **Key Environment Variables:**
 - `SECRET_KEY` - Flask secret key (generate with: `python -c "import secrets; print(secrets.token_hex(32))"`)
-- `LLM_API_KEY` - LLM API key (see [LLM_SETUP.md](LLM_SETUP.md))
+- `DATABASE_URL` - Database URL (default: `sqlite:///shellsentry.db`)
+- `LLM_API_KEY` - LLM API key (see [LLM_SETUP.md](MdFiles/LLM_SETUP.md))
 - `LLM_API_BASE_URL` - API endpoint URL
 - `LLM_MODEL` - Model name
 - `SSH_USER` - SSH username for remote servers
+- `SSH_PASSWORD` - SSH password (optional; use key auth if not set)
 - `SSH_KEY_PATH` - Path to SSH private key (default: `~/.ssh/id_rsa`)
 - `REMOTE_SERVERS` - Comma-separated list of server hostnames/IPs
 - `ALLOW_ROOT_EXECUTION` - Allow sudo/root commands (default: `false`)
@@ -98,29 +99,34 @@ See [QUICKSTART.md](QUICKSTART.md) for detailed configuration instructions.
 
 ```
 ShellSentry/
-├── app.py                 # Main Flask application
-├── run.py                 # Application runner with startup info
+├── run.py                 # Application runner (run this: python run.py)
 ├── test_llm.py            # LLM connection diagnostic tool
-├── config.py              # Configuration management
-├── models.py              # Database models
-├── auth.py                # Authentication functions
-├── security.py            # Security layer (input validation)
-├── llm_client.py          # LLM API client
-├── command_validator.py   # Command validation (whitelist/blacklist)
-├── ssh_executor.py        # SSH remote execution
-├── logger.py              # Logging setup
 ├── requirements.txt       # Python dependencies
 ├── env.example            # Environment variable template
+├── src/                   # Application package
+│   ├── app.py             # Main Flask application
+│   ├── config.py          # Configuration (from .env)
+│   ├── models.py          # Database models
+│   ├── auth.py            # Authentication functions
+│   ├── security.py        # Security layer (input validation)
+│   ├── llm_client.py      # LLM API client (OpenAI-compatible)
+│   ├── command_validator.py  # Command validation (whitelist/blacklist)
+│   ├── ssh_executor.py    # SSH remote execution (Paramiko)
+│   └── logger.py          # Logging setup
 ├── templates/             # HTML templates
 │   ├── base.html
 │   ├── login.html
 │   ├── register.html
 │   └── dashboard.html
-└── static/                # Static files
-    ├── css/
-    │   └── style.css
-    └── js/
-        └── dashboard.js
+├── static/                # Static files
+│   ├── css/
+│   │   └── style.css
+│   └── js/
+│       └── dashboard.js
+└── MdFiles/               # Documentation
+    ├── QUICKSTART.md
+    ├── LLM_SETUP.md
+    └── projectDescription.md
 ```
 
 ## Supported Commands
@@ -132,7 +138,7 @@ The system supports a wide range of safe system administration commands:
 - **Monitoring**: `dmesg`, `journalctl`, `systemctl`, `lsof`
 - **File Operations**: `ls`, `cat`, `grep`, `find`, `head`, `tail`
 - **Network Tools**: `curl`, `wget`, `dig`, `nslookup`, `traceroute`
-- And many more (see `command_validator.py` for full whitelist)
+- And many more (see `src/command_validator.py` for full whitelist)
 
 ## Limitations
 
