@@ -25,6 +25,22 @@ class Config:
     # Remote Servers
     REMOTE_SERVERS = [s.strip() for s in os.environ.get('REMOTE_SERVERS', '').split(',') if s.strip()]
     
+    # Per-server SSH credentials (format: IP:username:password,IP:username:password)
+    # Example: 192.168.56.101:hero:hero,192.168.56.102:vboxuser:Dana2004
+    _server_creds_raw = os.environ.get('SERVER_CREDENTIALS', '')
+    SERVER_CREDENTIALS = {}
+    if _server_creds_raw:
+        for cred_entry in _server_creds_raw.split(','):
+            cred_entry = cred_entry.strip()
+            if cred_entry and ':' in cred_entry:
+                parts = cred_entry.split(':', 2)  # Split into max 3 parts (IP, user, password)
+                if len(parts) == 3:
+                    server_ip, username, password = parts
+                    SERVER_CREDENTIALS[server_ip.strip()] = {
+                        'username': username.strip(),
+                        'password': password.strip()
+                    }
+    
     # Security Settings
     ALLOW_ROOT_EXECUTION = os.environ.get('ALLOW_ROOT_EXECUTION', 'false').lower() == 'true'
     LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')

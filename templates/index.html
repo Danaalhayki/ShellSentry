@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+
+{% block title %}ShellSentry - Secure LLM-to-Bash Interface{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Hide theme toggle on landing page */
+    .theme-toggle {
+        display: none !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="landing-page">
+    <!-- Hero Section -->
+    <div class="hero-section">
+        <div class="hero-content">
+            <div class="hero-badge">
+                <span class="badge-icon">🛡️</span>
+                <span>Secure LLM-to-Bash Interface</span>
+            </div>
+            <h1 class="hero-title">
+                Execute Commands on Remote Servers
+                <span class="gradient-text">with Natural Language</span>
+            </h1>
+            <p class="hero-description">
+                Transform your ideas into secure Bash commands. ShellSentry uses AI to understand your intent 
+                and executes commands safely across multiple remote servers.
+            </p>
+            <div class="hero-cta">
+                <a href="{{ url_for('register') }}" class="btn btn-primary btn-large">Get Started</a>
+                <a href="{{ url_for('login') }}" class="btn btn-secondary btn-large">Login</a>
+            </div>
+            <div class="hero-stats">
+                <div class="stat-item">
+                    <div class="stat-number">🔒</div>
+                    <div class="stat-label">Secure Execution</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">⚡</div>
+                    <div class="stat-label">Real-time Results</div>
+                </div>
+            </div>
+        </div>
+        <div class="hero-visual">
+            <script type="module" src="https://unpkg.com/@splinetool/viewer@1.12.57/build/spline-viewer.js"></script>
+            <spline-viewer 
+                url="https://prod.spline.design/8mKTF6lHVf5cxU0T/scene.splinecode"
+                loading="lazy"
+                style="width: 100%; height: 100%;"
+            ></spline-viewer>
+        </div>
+    </div>
+
+    <!-- Features Section -->
+    <div class="features-section">
+        <div class="feature-card">
+            <div class="feature-icon">🤖</div>
+            <h3>AI-Powered</h3>
+            <p>Natural language processing converts your requests into secure Bash commands</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🔒</div>
+            <h3>Secure Execution</h3>
+            <p>Multi-layer security with input validation and command whitelisting</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🌐</div>
+            <h3>Multi-Server</h3>
+            <p>Execute commands across multiple remote servers simultaneously</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">📊</div>
+            <h3>Real-time Results</h3>
+            <p>Get instant feedback with detailed execution results and logs</p>
+        </div>
+    </div>
+
+    <!-- How It Works Section -->
+    <div class="how-it-works-section">
+        <h2 class="section-title">How It Works</h2>
+        <div class="steps-container">
+            <div class="step-item">
+                <div class="step-number">1</div>
+                <h3>Describe Your Intent</h3>
+                <p>Type what you want to do in plain English</p>
+            </div>
+            <div class="step-arrow">→</div>
+            <div class="step-item">
+                <div class="step-number">2</div>
+                <h3>AI Generates Command</h3>
+                <p>Our LLM converts your request into secure Bash</p>
+            </div>
+            <div class="step-arrow">→</div>
+            <div class="step-item">
+                <div class="step-number">3</div>
+                <h3>Secure Execution</h3>
+                <p>Commands are validated and executed on remote servers</p>
+            </div>
+            <div class="step-arrow">→</div>
+            <div class="step-item">
+                <div class="step-number">4</div>
+                <h3>Get Results</h3>
+                <p>View real-time execution results and logs</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- CTA Section -->
+    <div class="cta-section">
+        <h2>Ready to Get Started?</h2>
+        <p>Join ShellSentry today and experience the power of AI-driven server management</p>
+        <div class="cta-buttons">
+            <a href="{{ url_for('register') }}" class="btn btn-primary btn-large">Create Account</a>
+            <a href="{{ url_for('login') }}" class="btn btn-secondary btn-large">Login</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Error handling for Spline viewer WebGL issues
+window.addEventListener('error', function(e) {
+    if (e.message && (e.message.includes('WebGL') || e.message.includes('spline'))) {
+        console.warn('WebGL context issue detected. The 3D viewer may not render properly.');
+        setTimeout(function() {
+            const heroVisual = document.querySelector('.hero-visual');
+            if (heroVisual) {
+                const splineViewer = heroVisual.querySelector('spline-viewer');
+                if (splineViewer && !splineViewer.shadowRoot) {
+                    // Fallback if viewer fails to load
+                    heroVisual.innerHTML = '<div class="shield-fallback"><div class="shield-icon">🛡️</div><div class="shield-text">Secure ShellSentry</div></div>';
+                }
+            }
+        }, 2000);
+    }
+}, true);
+
+// Check if WebGL is available
+function checkWebGL() {
+    try {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        if (!gl) {
+            console.warn('WebGL is not supported. 3D viewer may not work.');
+            return false;
+        }
+        return true;
+    } catch (e) {
+        console.warn('WebGL check failed:', e);
+        return false;
+    }
+}
+
+// Run check after page load
+document.addEventListener('DOMContentLoaded', function() {
+    if (!checkWebGL()) {
+        setTimeout(function() {
+            const heroVisual = document.querySelector('.hero-visual');
+            const splineViewer = heroVisual?.querySelector('spline-viewer');
+            if (splineViewer && (!splineViewer.shadowRoot || splineViewer.shadowRoot.children.length === 0)) {
+                heroVisual.innerHTML = '<div class="shield-fallback"><div class="shield-icon">🛡️</div><div class="shield-text">Secure ShellSentry</div></div>';
+            }
+        }, 3000);
+    }
+    
+    // Additional check after Spline viewer should have loaded
+    setTimeout(function() {
+        const heroVisual = document.querySelector('.hero-visual');
+        const splineViewer = heroVisual?.querySelector('spline-viewer');
+        if (splineViewer) {
+            const hasContent = splineViewer.shadowRoot && splineViewer.shadowRoot.children.length > 0;
+            if (!hasContent) {
+                heroVisual.innerHTML = '<div class="shield-fallback"><div class="shield-icon">🛡️</div><div class="shield-text">Secure ShellSentry</div></div>';
+            }
+        }
+    }, 5000);
+});
+</script>
+{% endblock %}
+

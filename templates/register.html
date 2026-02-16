@@ -7,32 +7,33 @@
     <div class="auth-card">
         <div class="auth-brand">
             <img src="{{ url_for('static', filename='images/logo.webp') }}" alt="ShellSentry" class="auth-logo">
-            <h2>ShellSentry</h2>
+            <h1 class="auth-title">ShellSentry</h1>
             <p class="auth-subtitle">Join ShellSentry</p>
         </div>
-        <h3 class="auth-form-title">Create Account</h3>
+        <h2 class="auth-form-title">Create Account</h2>
         
         <form method="POST" action="{{ url_for('register') }}" class="auth-form">
             <div class="form-group">
                 <label for="username">Username</label>
-                <input type="text" id="username" name="username" required autofocus>
+                <input type="text" id="username" name="username" placeholder="Choose a username" required autofocus>
             </div>
             
             <div class="form-group">
                 <label for="email">Email</label>
-                <input type="email" id="email" name="email" required>
+                <input type="email" id="email" name="email" placeholder="Enter your email" required>
             </div>
             
             <div class="form-group">
                 <label for="password">Password</label>
-                <input type="password" id="password" name="password" required>
+                <input type="password" id="password" name="password" placeholder="Create a password" required>
             </div>
             
             <button type="submit" class="btn btn-primary btn-block">Register</button>
         </form>
         
         <div class="auth-footer">
-            <p>Already have an account? <a href="{{ url_for('login') }}">Login here</a></p>
+            <p class="auth-footer-text">Already have an account?</p>
+            <a href="{{ url_for('login') }}" class="btn btn-auth-link">Login here</a>
         </div>
     </div>
 </div>

@@ -79,9 +79,9 @@ document.getElementById('commandForm').addEventListener('submit', async function
                     <span class="result-status error">Failed</span>
                 </div>
                 <div class="result-error">${escapeHtml(errorMessage).replace(/\n/g, '<br>')}</div>
-                <div style="margin-top: 1rem; padding: 1rem; background-color: #fef3c7; border-radius: 0.5rem;">
+                <div class="troubleshooting-tips">
                     <strong>💡 Troubleshooting Tips:</strong>
-                    <ul style="margin-top: 0.5rem; margin-left: 1.5rem;">
+                    <ul>
                         <li>Check your internet connection</li>
                         <li>Verify the Flask server is running</li>
                         <li>Check if LLM_API_KEY is correctly set in your .env file</li>

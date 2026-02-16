@@ -20,6 +20,7 @@ class SSHExecutor:
         self.ssh_password = Config.SSH_PASSWORD
         self.ssh_key_path = os.path.expanduser(Config.SSH_KEY_PATH)
         self.ssh_agent_socket = Config.SSH_AGENT_SOCKET
+        self.server_credentials = Config.SERVER_CREDENTIALS
     
     def execute_on_servers(self, command, servers, username, user_id=None, original_request=''):
         """
@@ -76,18 +77,33 @@ class SSHExecutor:
             ssh = paramiko.SSHClient()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             
+            # Get server-specific credentials if available, otherwise use default
+            server_username = self.ssh_user or 'root'
+            server_password = self.ssh_password
+            has_server_specific_creds = False
+            
+            if server in self.server_credentials:
+                server_username = self.server_credentials[server]['username']
+                server_password = self.server_credentials[server]['password']
+                has_server_specific_creds = True
+                logger.info(f"Using server-specific credentials for {server}: user={server_username}")
+            
             # Connect to server with retry logic
             connect_kwargs = {
                 'hostname': server,
-                'username': self.ssh_user or 'root',
+                'username': server_username,
                 'timeout': 30,  # Increased timeout
                 'look_for_keys': False,  # Disable auto-detection to avoid DSA keys
                 'allow_agent': False     # Disable agent to avoid DSA keys
             }
             
-            # Use SSH key if available
-            if self.ssh_key_path and os.path.exists(self.ssh_key_path):
-                # Explicitly load RSA key to avoid DSA key issues
+            # Prioritize password authentication when server-specific credentials are provided
+            if has_server_specific_creds and server_password:
+                # Use password authentication when server-specific credentials are provided
+                connect_kwargs['password'] = server_password
+                logger.info(f"Using password authentication for {server}")
+            elif self.ssh_key_path and os.path.exists(self.ssh_key_path):
+                # Use SSH key if available (and no server-specific password)
                 try:
                     from paramiko import RSAKey, Ed25519Key
                     import io
@@ -117,13 +133,13 @@ class SSHExecutor:
             elif self.ssh_agent_socket:
                 # Use SSH agent
                 connect_kwargs['allow_agent'] = True
-            elif self.ssh_password:
-                # Use password authentication
-                connect_kwargs['password'] = self.ssh_password
+            elif server_password:
+                # Use password authentication (default password)
+                connect_kwargs['password'] = server_password
                 logger.info(f"Using password authentication for {server}")
             else:
                 # Try password authentication (not recommended)
-                logger.warning(f"No SSH key found, attempting password auth for {server}")
+                logger.warning(f"No SSH key or password found for {server}")
             
             # Retry connection logic
             max_retries = 2
@@ -181,6 +197,8 @@ class SSHExecutor:
                 error_msg = f'DNS resolution failed: Could not resolve {server}'
             elif 'no route to host' in error_msg.lower():
                 error_msg = f'Network unreachable: Cannot reach {server}'
+            elif 'unable to connect to port 22' in error_msg.lower() or 'port 22' in error_msg.lower():
+                error_msg = f'Cannot connect to SSH port 22 on {server}. Possible causes: SSH service not running, firewall blocking port 22, or server is down.'
             return {
                 'success': False,
                 'error': f'SSH error: {error_msg}',
@@ -200,6 +218,9 @@ class SSHExecutor:
         except Exception as e:
             error_msg = str(e)
             logger.error(f"Unexpected error for {server}: {error_msg}", exc_info=True)
+            # Check for connection errors
+            if 'unable to connect to port 22' in error_msg.lower() or 'port 22' in error_msg.lower():
+                error_msg = f'Cannot connect to SSH port 22 on {server}. Possible causes: SSH service not running, firewall blocking port 22, or server is down.'
             return {
                 'success': False,
                 'error': f'Unexpected error: {error_msg}',
