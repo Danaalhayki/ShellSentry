@@ -1177,6 +1177,127 @@ main {
     font-size: 0.9rem;
 }
 
+/* Error Pages */
+.error-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: calc(100vh - 12rem);
+    padding: 3rem 1.5rem;
+}
+
+.error-page-card {
+    background: linear-gradient(135deg, var(--card-bg) 0%, rgba(153, 41, 234, 0.06) 100%);
+    border: 1px solid var(--border-color);
+    border-left: 4px solid var(--primary);
+    border-radius: 1.5rem;
+    padding: 3rem;
+    max-width: 560px;
+    width: 100%;
+    text-align: center;
+    box-shadow: var(--shadow-lg);
+    animation: fadeInUp 0.5s ease-out;
+    position: relative;
+    overflow: hidden;
+}
+
+.error-page-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--primary), var(--accent));
+    opacity: 0.6;
+}
+
+.error-visual {
+    margin-bottom: 1.5rem;
+}
+
+.error-code {
+    display: block;
+    font-size: clamp(4rem, 12vw, 7rem);
+    font-weight: 800;
+    line-height: 1;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -0.04em;
+    filter: drop-shadow(0 4px 20px rgba(153, 41, 234, 0.35));
+}
+
+.error-terminal-line {
+    margin-top: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-family: 'Courier New', Consolas, monospace;
+    font-size: 0.95rem;
+    color: var(--secondary-color);
+}
+
+.error-prompt {
+    color: var(--cream);
+    background: linear-gradient(135deg, var(--black) 0%, #1a1a1a 100%);
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-weight: 600;
+}
+
+.error-cmd {
+    color: var(--primary);
+    font-weight: 500;
+}
+
+.error-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--text-color);
+    margin-bottom: 0.75rem;
+}
+
+.error-message {
+    font-size: 1.05rem;
+    color: var(--secondary-color);
+    line-height: 1.6;
+    margin-bottom: 1.5rem;
+}
+
+.error-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: center;
+}
+
+.btn-error-secondary {
+    background: transparent;
+    color: var(--primary);
+    border: 2px solid var(--primary);
+}
+
+.btn-error-secondary:hover {
+    background: rgba(153, 41, 234, 0.1);
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+@media (max-width: 768px) {
+    .error-page-card {
+        padding: 2rem 1.5rem;
+    }
+    .error-actions {
+        flex-direction: column;
+    }
+    .error-actions .btn {
+        width: 100%;
+    }
+}
+
 /* Loading State */
 .btn-loader {
     display: inline-block;

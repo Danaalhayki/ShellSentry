@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}{{ error_title }} - ShellSentry{% endblock %}
+
+{% block content %}
+<div class="error-page">
+    <div class="error-page-card">
+        <div class="error-visual">
+            <span class="error-code" aria-hidden="true">{{ error_code }}</span>
+            <div class="error-terminal-line" aria-hidden="true">
+                <span class="error-prompt">$</span>
+                <span class="error-cmd">request {{ error_code }}</span>
+            </div>
+        </div>
+        <h1 class="error-title">{{ error_title }}</h1>
+        <p class="error-message">{{ error_message }}</p>
+        <div class="error-actions">
+            <a href="javascript:history.back()" class="btn btn-error-secondary btn-large">Go Back</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
