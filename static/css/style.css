@@ -459,6 +459,12 @@ main {
     font-size: 0.875rem;
 }
 
+.form-group .password-hint {
+    font-size: 0.8rem;
+    line-height: 1.4;
+    margin-top: 0.35rem;
+}
+
 .auth-footer {
     text-align: center;
     padding-top: 1.75rem;

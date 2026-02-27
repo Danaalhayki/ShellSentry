@@ -39,13 +39,8 @@ def create_tables():
     """Create database tables"""
     with app.app_context():
         db.create_all()
-        # Create default admin user if it doesn't exist
-        if not User.query.filter_by(username='admin').first():
-            admin = User(username='admin', email='admin@shellsentry.local')
-            admin.set_password('admin123')  # Change in production!
-            db.session.add(admin)
-            db.session.commit()
-            logger.info("Default admin user created (username: admin, password: admin123)")
+        # Create default admin user if it doesn't exist (all users are equal; is_admin unused)
+       
 
 # Initialize database on startup
 create_tables()
@@ -76,16 +71,21 @@ def login():
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        username = request.form.get('username')
-        email = request.form.get('email')
+        username = request.form.get('username', '').strip()
+        email = request.form.get('email', '').strip()
         password = request.form.get('password')
+        password_confirm = request.form.get('password_confirm')
         
-        if register_user(username, email, password):
-            flash('Registration successful. Please login.', 'success')
-            logger.info(f"New user registered: {username}")
-            return redirect(url_for('login'))
+        if password != password_confirm:
+            flash('Passwords do not match. Please verify your password confirmation.', 'error')
         else:
-            flash('Registration failed. Username may already exist.', 'error')
+            success, msg = register_user(username, email, password)
+            if success:
+                flash('Registration successful. Please login.', 'success')
+                logger.info(f"New user registered: {username}")
+                return redirect(url_for('login'))
+            else:
+                flash(msg, 'error')
     
     return render_template('register.html')
 
