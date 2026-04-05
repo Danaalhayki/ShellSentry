@@ -123,9 +123,24 @@ def execute_command():
                 'reason': validation_result['reason']
             }), 400
         
-        # Step 2: LLM Processing
-        logger.info(f"User {current_user.username} requested: {natural_language}")
-        llm_response = llm_client.generate_command(natural_language)
+        if not target_servers:
+            target_servers = list(app.config['REMOTE_SERVERS'] or [])
+
+        if not target_servers:
+            return jsonify({
+                'error': 'No target servers configured',
+                'details': 'Please configure REMOTE_SERVERS in .env or specify servers in the request'
+            }), 400
+
+        # Step 2: SSH snapshot before LLM: OS (uname), running systemd services, listening ports (ss)
+        host_context = ssh_executor.probe_host_context(target_servers)
+        logger.info(
+            f"User {current_user.username} requested: {natural_language} "
+            f"(host context probe: {len(host_context)} host(s))"
+        )
+
+        # Step 3: LLM Processing
+        llm_response = llm_client.generate_command(natural_language, remote_host_context=host_context)
         
         if not llm_response['success']:
             return jsonify({
@@ -136,7 +151,7 @@ def execute_command():
         generated_command = llm_response['command']
         logger.info(f"Generated command: {generated_command}")
         
-        # Step 3: Command Validation
+        # Step 4: Command Validation
         validation_result = command_validator.validate(generated_command)
         if not validation_result['valid']:
             logger.warning(f"Command validation failed: {validation_result['reason']}")
@@ -149,16 +164,7 @@ def execute_command():
         # Normalize command for execution (strip shebang so shell does not try to run !/bin/bash etc.)
         command_to_run = command_validator.normalize_for_execution(generated_command)
         
-        # Step 4: Remote Execution
-        if not target_servers:
-            target_servers = app.config['REMOTE_SERVERS']
-        
-        if not target_servers:
-            return jsonify({
-                'error': 'No target servers configured',
-                'details': 'Please configure REMOTE_SERVERS in .env or specify servers in the request'
-            }), 400
-        
+        # Step 5: Remote Execution
         execution_results = ssh_executor.execute_on_servers(
             command_to_run,
             target_servers,
@@ -167,12 +173,13 @@ def execute_command():
             natural_language
         )
         
-        # Step 5: Log execution
+        # Step 6: Log execution
         logger.info(f"Command executed by {current_user.username} on {len(target_servers)} server(s)")
         
         return jsonify({
             'success': True,
             'original_request': natural_language,
+            'remote_host_context': host_context,
             'generated_command': command_to_run,
             'results': execution_results
         })

@@ -59,65 +59,123 @@ class SSHExecutor:
         self._log_execution(username, user_id, original_request, command, servers, results)
         
         return results
-    
-    def _execute_on_server(self, server, command):
+
+    def _exec_remote_text(self, ssh, command, timeout=25):
+        """Run one non-interactive command; return (exit_code, stdout, stderr)."""
+        stdin, stdout, stderr = ssh.exec_command(command, timeout=timeout)
+        exit_code = stdout.channel.recv_exit_status()
+        out = stdout.read().decode('utf-8', errors='replace').strip()
+        err = stderr.read().decode('utf-8', errors='replace').strip()
+        return exit_code, out, err
+
+    def probe_host_context(self, servers):
         """
-        Execute command on a single server
-        
-        Args:
-            server: Server hostname/IP
-            command: Bash command to execute
-            
-        Returns:
-            dict: Execution result
+        Per host over one SSH session: OS (uname -a), running systemd services (summary),
+        and listening TCP/UDP sockets (ss), similar in spirit to nmap "service" hints.
+        Does not write ExecutionLog entries. Output is truncated on the remote via head.
         """
-        ssh = None
+        if not servers:
+            return {}
+        results = {}
+        for server in servers:
+            ssh, connect_error = self._open_ssh(server)
+            if connect_error is not None:
+                results[server] = connect_error
+                continue
+            try:
+                u_exit, u_out, u_err = self._exec_remote_text(ssh, 'uname -a', timeout=15)
+                # Running service units (systemd); empty if non-systemd or no permission
+                svc_cmd = (
+                    "systemctl list-units --type=service --state=running --no-pager "
+                    "2>/dev/null | head -n 50"
+                )
+                _s_exit, s_out, s_err = self._exec_remote_text(ssh, svc_cmd, timeout=25)
+                # Listening ports + processes when permitted (like nmap-style listeners)
+                _t_exit, t_out, t_err = self._exec_remote_text(
+                    ssh, "ss -tlnp 2>/dev/null | head -n 40", timeout=20
+                )
+                _ud_exit, ud_out, ud_err = self._exec_remote_text(
+                    ssh, "ss -ulnp 2>/dev/null | head -n 25", timeout=20
+                )
+
+                uname_line = u_out or None
+                results[server] = {
+                    'success': u_exit == 0,
+                    'uname_line': uname_line,
+                    'uname_stderr': u_err or None,
+                    'running_services': s_out if s_out else None,
+                    'running_services_stderr': s_err if s_err else None,
+                    'listening_tcp': t_out if t_out else None,
+                    'listening_tcp_stderr': t_err if t_err else None,
+                    'listening_udp': ud_out if ud_out else None,
+                    'listening_udp_stderr': ud_err if ud_err else None,
+                    'error': None
+                    if u_exit == 0
+                    else (u_err or f'uname exited with {u_exit}'),
+                }
+            except Exception as e:
+                logger.warning(f"Host context probe failed on {server}: {str(e)}")
+                results[server] = {
+                    'success': False,
+                    'uname_line': None,
+                    'running_services': None,
+                    'listening_tcp': None,
+                    'listening_udp': None,
+                    'stderr': str(e),
+                    'error': str(e),
+                }
+            finally:
+                ssh.close()
+        return results
+
+    def probe_os_uname(self, servers):
+        """
+        Backward-compatible alias: full host context (OS + services + listeners).
+        Prefer probe_host_context in new code.
+        """
+        return self.probe_host_context(servers)
+
+    def _open_ssh(self, server):
+        """
+        Open an SSH connection to server using the same credential rules as execution.
+        Returns (ssh_client, None) on success, or (None, error_dict) on failure.
+        """
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         try:
-            # Create SSH client
-            ssh = paramiko.SSHClient()
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            
-            # Get server-specific credentials if available, otherwise use default
             server_username = self.ssh_user or 'root'
             server_password = self.ssh_password
             has_server_specific_creds = False
-            
+
             if server in self.server_credentials:
                 server_username = self.server_credentials[server]['username']
                 server_password = self.server_credentials[server]['password']
                 has_server_specific_creds = True
                 logger.info(f"Using server-specific credentials for {server}: user={server_username}")
-            
-            # Connect to server with retry logic
+
             connect_kwargs = {
                 'hostname': server,
                 'username': server_username,
-                'timeout': 30,  # Increased timeout
-                'look_for_keys': False,  # Disable auto-detection to avoid DSA keys
-                'allow_agent': False     # Disable agent to avoid DSA keys
+                'timeout': 30,
+                'look_for_keys': False,
+                'allow_agent': False
             }
-            
-            # Prioritize password authentication when server-specific credentials are provided
+
             if has_server_specific_creds and server_password:
-                # Use password authentication when server-specific credentials are provided
                 connect_kwargs['password'] = server_password
                 logger.info(f"Using password authentication for {server}")
             elif self.ssh_key_path and os.path.exists(self.ssh_key_path):
-                # Use SSH key if available (and no server-specific password)
                 try:
                     from paramiko import RSAKey, Ed25519Key
                     import io
                     with open(self.ssh_key_path, 'r') as f:
                         key_content = f.read()
-                        # Only try RSA or Ed25519 keys, explicitly skip DSA
                         if 'BEGIN RSA PRIVATE KEY' in key_content or 'BEGIN OPENSSH PRIVATE KEY' in key_content:
-                            # Try RSA first
                             try:
                                 key = RSAKey.from_private_key(io.StringIO(key_content))
                                 connect_kwargs['pkey'] = key
                                 logger.info(f"Using RSA SSH key: {self.ssh_key_path}")
                             except Exception as e1:
-                                # Try Ed25519
                                 try:
                                     key = Ed25519Key.from_private_key(io.StringIO(key_content))
                                     connect_kwargs['pkey'] = key
@@ -131,30 +189,108 @@ class SSHExecutor:
                     logger.error(f"Could not load SSH key: {str(e)}")
                     raise
             elif self.ssh_agent_socket:
-                # Use SSH agent
                 connect_kwargs['allow_agent'] = True
             elif server_password:
-                # Use password authentication (default password)
                 connect_kwargs['password'] = server_password
                 logger.info(f"Using password authentication for {server}")
             else:
-                # Try password authentication (not recommended)
                 logger.warning(f"No SSH key or password found for {server}")
-            
-            # Retry connection logic
+
             max_retries = 2
             for attempt in range(max_retries):
                 try:
                     ssh.connect(**connect_kwargs)
-                    break  # Success, exit retry loop
+                    return ssh, None
                 except (paramiko.SSHException, Exception) as e:
                     if attempt < max_retries - 1:
-                        logger.warning(f"SSH connection attempt {attempt + 1}/{max_retries} failed for {server}: {str(e)}, retrying...")
+                        logger.warning(
+                            f"SSH connection attempt {attempt + 1}/{max_retries} failed for {server}: {str(e)}, retrying..."
+                        )
                         import time
                         time.sleep(1)
                         continue
-                    else:
-                        raise
+                    raise
+        except paramiko.AuthenticationException:
+            logger.error(f"Authentication failed for {server}")
+            ssh.close()
+            return None, {
+                'success': False,
+                'uname_line': None,
+                'stderr': 'SSH authentication failed',
+                'exit_code': -1,
+                'error': 'Authentication failed'
+            }
+        except paramiko.SSHException as e:
+            error_msg = str(e)
+            logger.error(f"SSH error for {server}: {error_msg}")
+            if 'timeout' in error_msg.lower():
+                error_msg = f'Connection timeout: Server {server} did not respond'
+            elif 'name resolution' in error_msg.lower() or 'could not resolve' in error_msg.lower():
+                error_msg = f'DNS resolution failed: Could not resolve {server}'
+            elif 'no route to host' in error_msg.lower():
+                error_msg = f'Network unreachable: Cannot reach {server}'
+            elif 'unable to connect to port 22' in error_msg.lower() or 'port 22' in error_msg.lower():
+                error_msg = (
+                    f'Cannot connect to SSH port 22 on {server}. Possible causes: SSH service not running, '
+                    f'firewall blocking port 22, or server is down.'
+                )
+            ssh.close()
+            return None, {
+                'success': False,
+                'uname_line': None,
+                'stderr': error_msg,
+                'exit_code': -1,
+                'error': f'SSH error: {error_msg}'
+            }
+        except socket.timeout:
+            logger.error(f"Connection timeout for {server}")
+            ssh.close()
+            return None, {
+                'success': False,
+                'uname_line': None,
+                'stderr': 'Connection timeout',
+                'exit_code': -1,
+                'error': f'Connection timeout: Server {server} did not respond in time'
+            }
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"Unexpected error for {server}: {error_msg}", exc_info=True)
+            if 'unable to connect to port 22' in error_msg.lower() or 'port 22' in error_msg.lower():
+                error_msg = (
+                    f'Cannot connect to SSH port 22 on {server}. Possible causes: SSH service not running, '
+                    f'firewall blocking port 22, or server is down.'
+                )
+            ssh.close()
+            return None, {
+                'success': False,
+                'uname_line': None,
+                'stderr': error_msg,
+                'exit_code': -1,
+                'error': f'Unexpected error: {error_msg}'
+            }
+
+    def _execute_on_server(self, server, command):
+        """
+        Execute command on a single server
+        
+        Args:
+            server: Server hostname/IP
+            command: Bash command to execute
+            
+        Returns:
+            dict: Execution result
+        """
+        ssh = None
+        try:
+            ssh, connect_error = self._open_ssh(server)
+            if connect_error is not None:
+                return {
+                    'success': False,
+                    'error': connect_error.get('error', 'SSH connection failed'),
+                    'stdout': '',
+                    'stderr': connect_error.get('stderr', ''),
+                    'exit_code': connect_error.get('exit_code', -1)
+                }
             
             # Execute command with increased timeout
             # Use heredoc for multi-line scripts so the remote shell receives the full script

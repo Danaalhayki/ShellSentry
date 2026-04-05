@@ -172,7 +172,18 @@ class CommandValidator:
             'su': self._validate_su,
             'sudo': self._validate_sudo,
         }
-    
+
+    def _strip_inline_backticks(self, text):
+        """Remove Markdown inline-code backticks so `ping` is validated as ping, not `ping."""
+        if not text:
+            return text
+        t = text.strip()
+        while t.startswith('`'):
+            t = t[1:].lstrip()
+        while t.endswith('`'):
+            t = t[:-1].rstrip()
+        return t
+
     def validate(self, command):
         """
         Validate a Bash command
@@ -192,6 +203,7 @@ class CommandValidator:
         
         # Remove shebang line(s) at the start (e.g. #!/bin/bash or !/bin/bash) so they are not validated as commands
         command = self._strip_shebang(command)
+        command = self._strip_inline_backticks(command)
         command = command.strip()
         
         # Remove surrounding quotes if present
@@ -214,12 +226,13 @@ class CommandValidator:
             parts = re.split(r'[;&|]|\|\||&&', command)
             
             for part in parts:
-                part = part.strip()
+                part = self._strip_inline_backticks(part.strip())
                 if not part:
                     continue
                 
                 tokens = part.split()
                 first_word = tokens[0] if tokens else ''
+                first_word = self._strip_inline_backticks(first_word)
                 base_command = os.path.basename(first_word)
                 
                 # Skip variable assignments (e.g. MACHINES=("m1" "m2") or FOO=bar)
@@ -276,6 +289,7 @@ class CommandValidator:
         if not command or not command.strip():
             return command
         command = self._strip_shebang(command)
+        command = self._strip_inline_backticks(command.strip())
         # Strip one level of surrounding quotes so "ps aux" -> ps aux (remote runs ps with arg aux)
         c = command.strip()
         if len(c) >= 2 and ((c[0] == '"' and c[-1] == '"') or (c[0] == "'" and c[-1] == "'")):

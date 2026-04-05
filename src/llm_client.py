@@ -16,12 +16,55 @@ class LLMClient:
         self.model = Config.LLM_MODEL
         self.api_type = Config.LLM_API_TYPE
     
-    def generate_command(self, natural_language_input):
+    def _format_remote_host_context(self, host_context):
+        """Turn per-host probe (OS, running services, listeners) into text for the LLM."""
+        if not host_context:
+            return None
+        blocks = []
+        for host in sorted(host_context.keys()):
+            info = host_context[host]
+            if info.get('error') and not info.get('uname_line') and not info.get('running_services'):
+                blocks.append(f"### {host}\n(could not connect or probe — {info['error']})")
+                continue
+            parts = [f"### {host}"]
+            if info.get('uname_line'):
+                parts.append(f"OS (uname -a): {info['uname_line']}")
+            elif info.get('error'):
+                parts.append(f"OS: unavailable ({info['error']})")
+            else:
+                parts.append("OS: unavailable")
+            if info.get('running_services'):
+                parts.append(
+                    "Running systemd service units (sample):\n"
+                    + info['running_services']
+                )
+            if info.get('listening_tcp'):
+                parts.append(
+                    "Listening TCP (ss -tlnp; like nmap listener view):\n"
+                    + info['listening_tcp']
+                )
+            if info.get('listening_udp'):
+                parts.append(
+                    "Listening UDP (ss -ulnp):\n"
+                    + info['listening_udp']
+                )
+            blocks.append("\n".join(parts))
+        if not blocks:
+            return None
+        return (
+            "Remote host snapshot gathered over SSH before generating the command "
+            "(OS, running services, listening ports). Use this to pick correct tools, paths, "
+            "and flags; align suggestions with what is actually running when relevant.\n\n"
+            + "\n\n".join(blocks)
+        )
+
+    def generate_command(self, natural_language_input, remote_host_context=None):
         """
         Generate Bash command from natural language input
         
         Args:
             natural_language_input: User's natural language request
+            remote_host_context: Optional dict host -> probe result from SSHExecutor.probe_host_context
             
         Returns:
             dict: {'success': bool, 'command': str, 'error': str}
@@ -43,6 +86,9 @@ Rules:
 4. Do not include sudo unless explicitly requested
 5. Output should be executable Bash code only
 6. If the request is unclear or unsafe, return "ERROR: Request unclear or potentially unsafe"
+7. When remote host context is provided (OS, running services, listening ports), prefer command-line flags, paths, and tools that match that environment; if a service (e.g. nginx, sshd) is visible in the snapshot, prefer inspecting that stack when the user asks about services or ports
+8. Output raw shell only: never wrap the command in backticks (`) or markdown.
+9. The app already runs your command on the target host via SSH; do not use ssh/scp to reach that host unless the user explicitly asks to SSH from the remote to another machine.
 
 Examples:
 - "Show active connections" -> "netstat -nlutp"
@@ -52,7 +98,11 @@ Examples:
 
 Now convert this request to a Bash command:"""
         
-        user_prompt = natural_language_input
+        ctx_block = self._format_remote_host_context(remote_host_context)
+        if ctx_block:
+            user_prompt = f"{ctx_block}\n\nUser request:\n{natural_language_input}"
+        else:
+            user_prompt = natural_language_input
         
         try:
             if self.api_type == 'openai' or 'openai' in self.api_base.lower():
@@ -136,6 +186,14 @@ Now convert this request to a Bash command:"""
             
             # Remove leading $ or # prompts
             command = re.sub(r'^[\$#]\s*', '', command)
+            
+            # Strip Markdown inline backticks (`ping ...`) so validation sees "ping", not "`ping"
+            command = command.strip()
+            while command.startswith('`'):
+                command = command[1:].lstrip()
+            while command.endswith('`'):
+                command = command[:-1].rstrip()
+            command = command.strip()
             
             return {
                 'success': True,
