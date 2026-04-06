@@ -13,6 +13,7 @@ class CommandValidator:
         # Whitelist of allowed commands
         self.whitelist = [
             'netstat', 'ss', 'ping', 'ifconfig', 'ip', 'hostname',
+            'hostnamectl', 'timedatectl', 'udevadm', 'getfacl', 'getenforce',
             'df', 'du', 'free', 'top', 'htop', 'ps', 'uptime',
             'who', 'w', 'last', 'uname', 'ls', 'cat', 'grep',
             'head', 'tail', 'wc', 'sort', 'uniq', 'find',
@@ -173,6 +174,35 @@ class CommandValidator:
             'sudo': self._validate_sudo,
         }
 
+        # When READ_ONLY_EXECUTION is on, only these bases (plus read-only-safe builtins) may run.
+        self.readonly_allowlist = frozenset({
+            'netstat', 'ss', 'ping', 'ifconfig', 'ip', 'hostname', 'df', 'du', 'free', 'top', 'htop',
+            'ps', 'uptime', 'who', 'w', 'last', 'lastb', 'uname', 'ls', 'cat', 'grep', 'egrep', 'fgrep',
+            'head', 'tail', 'wc', 'sort', 'uniq', 'find', 'date', 'dmesg', 'journalctl', 'systemctl',
+            'lsof', 'dig', 'nslookup', 'host', 'traceroute', 'tracepath', 'route', 'arp', 'mtr',
+            'mount', 'lsblk', 'blkid', 'lscpu', 'lspci', 'lsusb', 'dmidecode', 'sensors', 'lshw',
+            'iostat', 'vmstat', 'sar', 'mpstat', 'pidstat', 'strace', 'ltrace', 'tcpdump', 'tshark',
+            'which', 'whereis', 'locate', 'stat', 'file', 'md5sum', 'sha1sum', 'sha256sum', 'diff',
+            'cmp', 'comm', 'id', 'groups', 'whoami', 'logname', 'env', 'printenv', 'getconf', 'getent',
+            'man', 'info', 'help', 'apropos', 'whatis', 'less', 'more', 'most',
+            'awk', 'sed', 'cut', 'tr', 'basename', 'dirname', 'realpath', 'readlink',
+            'echo', 'printf', 'seq', 'yes', 'factor', 'bc', 'dc',
+            'type', 'command', 'hash',
+            'nmap', 'nmcli', 'ethtool', 'iwconfig', 'iw', 'ss', 'systemd-analyze', 'systemd-detect-virt',
+            'hostnamectl', 'timedatectl', 'udevadm', 'lsattr', 'getfacl', 'getenforce', 'iptables',
+            'pwd', 'pwdx', 'pgrep', 'pstree',
+        })
+
+        self.readonly_safe_builtins = frozenset({
+            'echo', 'printf', 'test', '[', '[[', 'true', 'false', ':',
+            'cd', 'pwd', 'pushd', 'popd', 'dirs',
+            'read', 'readonly', 'declare', 'local', 'export', 'set', 'unset',
+            'alias', 'unalias', 'type', 'command', 'hash',
+            'exit', 'return', 'break', 'continue',
+            'wait', 'jobs', 'fg', 'bg',
+            'history', 'fc',
+        })
+
     def _strip_inline_backticks(self, text):
         """Remove Markdown inline-code backticks so `ping` is validated as ping, not `ping."""
         if not text:
@@ -183,6 +213,128 @@ class CommandValidator:
         while t.endswith('`'):
             t = t[:-1].rstrip()
         return t
+
+    def _read_only_has_forbidden_redirect(self, cmd):
+        """Disallow > / >> to real files (allow only /dev/null and &1/&2 style merges)."""
+        if not cmd:
+            return False
+        if re.search(r'>>\s+(?!/dev/null)\S', cmd):
+            return True
+        for m in re.finditer(r'(?:^|[;\s|&])(\d*)>\s+(\S+)', cmd):
+            target = m.group(2)
+            if target.startswith('/dev/null'):
+                continue
+            if target.startswith('&'):
+                continue
+            return True
+        return False
+
+    def _read_only_global(self, command):
+        """Whole-command checks for read-only mode (privilege, pipes to shell, file writes)."""
+        c = command
+        if self._read_only_has_forbidden_redirect(c):
+            logger.warning("Read-only: forbidden shell redirect")
+            return {'valid': False, 'reason': 'Read-only mode: redirecting output to a file is not allowed'}
+
+        if re.search(r'\bsudo\b', c, re.IGNORECASE):
+            return {'valid': False, 'reason': 'Read-only mode: sudo is not allowed'}
+        if re.search(r'\bsu\s+(?:-|root\b)', c, re.IGNORECASE):
+            return {'valid': False, 'reason': 'Read-only mode: su is not allowed'}
+
+        if re.search(r'(?:^|[;\s|&])(?:bash|sh)\s+(?:-c|-s)\s', c):
+            return {'valid': False, 'reason': 'Read-only mode: invoking shell with -c/-s is not allowed'}
+
+        if re.search(r'\|\s*(?:bash|sh)\b', c):
+            return {'valid': False, 'reason': 'Read-only mode: piping to a shell is not allowed'}
+
+        if re.search(r'sed\s+(?:-i\S*|--in-place)', c, re.IGNORECASE):
+            return {'valid': False, 'reason': 'Read-only mode: sed in-place editing is not allowed'}
+
+        if re.search(r'(?:curl|wget)\s+.*(?:\s-o\s|\s--output(?:=|\s)|\s-O\b)', c, re.IGNORECASE):
+            return {'valid': False, 'reason': 'Read-only mode: curl/wget saving to a file is not allowed'}
+
+        if re.search(r'(?:tcpdump|tshark)\s+.*(?:\s-w\s|\s--write)', c, re.IGNORECASE):
+            return {'valid': False, 'reason': 'Read-only mode: writing packet capture to a file is not allowed'}
+
+        if re.search(r'\$\([^)]*\b(?:\b(?:rm|dd|mkdir|chmod|chown|mkfs|wget|curl|tee)\b|systemctl\s+start|iptables\s+-[AF])\b[^)]*\)', c, re.IGNORECASE):
+            return {'valid': False, 'reason': 'Read-only mode: command substitution contains a state-changing command'}
+
+        return {'valid': True}
+
+    def _read_only_check_part(self, part, base_command):
+        """Per pipeline segment: allow only inspection-style commands when read-only mode is on."""
+        if base_command in self.readonly_safe_builtins:
+            return {'valid': True}
+        if base_command not in self.readonly_allowlist:
+            logger.warning(f"Read-only: base command not allowed: {base_command}")
+            return {'valid': False, 'reason': f'Read-only mode: state-changing or disallowed command: {base_command}'}
+
+        p = part.strip()
+        if base_command == 'journalctl':
+            if re.search(
+                r'journalctl\s+(?:--vacuum|--flush|--rotate|--relinquish|--update-catalog|--setup-keys)\b',
+                p,
+                re.IGNORECASE,
+            ):
+                return {'valid': False, 'reason': 'Read-only mode: journalctl may only read logs, not vacuum or rotate'}
+
+        if base_command == 'systemctl':
+            if re.search(
+                r'systemctl\s+(?:start|stop|restart|reload|try-restart|reload-or-restart|'
+                r'enable|disable|mask|unmask|daemon-reload|daemon-reexec|isolate|edit|set-property|kill|reset-failed)',
+                p,
+                re.IGNORECASE,
+            ):
+                return {'valid': False, 'reason': 'Read-only mode: systemctl may only query status (not start/stop/enable/etc.)'}
+
+        if base_command == 'find':
+            if re.search(r'(?:^|\s)(?:-delete|-exec|-execdir|-ok|-okdir|--exec)\b', p, re.IGNORECASE):
+                return {'valid': False, 'reason': 'Read-only mode: find may not delete or execute subcommands'}
+
+        if base_command == 'ip':
+            if re.search(r'\bip\s+(?:link|addr|route|neigh|rule|netns|maddr|tunnel|tuntap|xfrm)\s+(?:set|add|del|flush|replace|change)\b', p, re.IGNORECASE):
+                return {'valid': False, 'reason': 'Read-only mode: ip may not change network configuration'}
+
+        if base_command == 'iptables':
+            # Allow -L, -S, -C (check), -n, -v, -x, -t, etc.; forbid mutations (-A, -D, -I, -N, -P, -F, -Z, ...).
+            # Match case-sensitively so -n (numeric) is not confused with -N (new chain).
+            if re.search(
+                r'iptables\s+(?:-[ADEFIJNPQRXZ]\b|--append|--delete|--insert|--replace|--flush|--zero|--delete-chain|--policy|--rename-chain|--new-chain|--modprobe|--load|--save)',
+                p,
+            ):
+                return {'valid': False, 'reason': 'Read-only mode: iptables may only be listed (e.g. -L, -S), not modified'}
+
+        if base_command == 'mount':
+            s = p.strip()
+            if s == 'mount' or re.match(r'^mount\s+(?:-l|--list)\b', s):
+                return {'valid': True}
+            return {'valid': False, 'reason': 'Read-only mode: only `mount` or `mount -l` are allowed (listing mounts)'}
+
+        if base_command in ('tcpdump', 'tshark'):
+            if re.search(r'(?:\s-w\s|\s--write)', p, re.IGNORECASE):
+                return {'valid': False, 'reason': 'Read-only mode: packet capture to a file is not allowed'}
+
+        if base_command == 'hostnamectl':
+            if re.search(
+                r'hostnamectl\s+(?:set-hostname|set-icon-name|set-chassis|set-deployment|set-location|commit)\b',
+                p,
+                re.IGNORECASE,
+            ):
+                return {'valid': False, 'reason': 'Read-only mode: hostnamectl may only show status, not change configuration'}
+
+        if base_command == 'timedatectl':
+            if re.search(
+                r'timedatectl\s+(?:set-time|set-timezone|set-local-rtc|set-ntp)\b',
+                p,
+                re.IGNORECASE,
+            ):
+                return {'valid': False, 'reason': 'Read-only mode: timedatectl may only show status, not change time or timezone'}
+
+        if base_command == 'udevadm':
+            if re.search(r'udevadm\s+(?:trigger|control|reload)\b', p, re.IGNORECASE):
+                return {'valid': False, 'reason': 'Read-only mode: udevadm trigger/control/reload is not allowed'}
+
+        return {'valid': True}
 
     def validate(self, command):
         """
@@ -218,6 +370,11 @@ class CommandValidator:
             if re.search(pattern, command, re.IGNORECASE):
                 logger.warning(f"Blacklist pattern matched: {pattern}")
                 return {'valid': False, 'reason': f'Forbidden pattern detected: {pattern}'}
+
+        if Config.READ_ONLY_EXECUTION:
+            ro_global = self._read_only_global(command)
+            if not ro_global['valid']:
+                return ro_global
         
         # Parse command to get the base command
         try:
@@ -257,6 +414,11 @@ class CommandValidator:
                             'valid': False,
                             'reason': f'Command not allowed: {base_command}'
                         }
+
+                if Config.READ_ONLY_EXECUTION:
+                    ro_part = self._read_only_check_part(part, base_command)
+                    if not ro_part['valid']:
+                        return ro_part
                 
                 # Check restricted commands
                 if base_command in self.restricted_commands:

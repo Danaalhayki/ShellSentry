@@ -8,6 +8,7 @@ from .llm_client import LLMClient
 from .command_validator import CommandValidator
 from .ssh_executor import SSHExecutor
 from .logger import setup_logger
+from .result_formatter import format_execution_payload, format_error_summary
 import os
 
 # Get the project root directory (parent of src)
@@ -112,7 +113,13 @@ def execute_command():
         target_servers = data.get('servers', [])
         
         if not natural_language:
-            return jsonify({'error': 'Command is required'}), 400
+            return jsonify({
+                'error': 'Command is required',
+                'natural_language_summary': format_error_summary(
+                    'Please describe what you want in the text box.',
+                    details='For example: Show how much disk space is free.',
+                ),
+            }), 400
         
         # Step 1: Input Validation
         validation_result = security_layer.validate_input(natural_language)
@@ -120,7 +127,11 @@ def execute_command():
             logger.warning(f"Input validation failed for user {current_user.username}: {validation_result['reason']}")
             return jsonify({
                 'error': 'Input validation failed',
-                'reason': validation_result['reason']
+                'reason': validation_result['reason'],
+                'natural_language_summary': format_error_summary(
+                    'We could not use that wording for safety reasons',
+                    validation_result['reason'],
+                ),
             }), 400
         
         if not target_servers:
@@ -129,7 +140,11 @@ def execute_command():
         if not target_servers:
             return jsonify({
                 'error': 'No target servers configured',
-                'details': 'Please configure REMOTE_SERVERS in .env or specify servers in the request'
+                'details': 'Please configure REMOTE_SERVERS in .env or specify servers in the request',
+                'natural_language_summary': format_error_summary(
+                    'No computers were selected to run this on',
+                    details='Enter host names in the Target Servers box or set REMOTE_SERVERS in your settings file.',
+                ),
             }), 400
 
         # Step 2: SSH snapshot before LLM: OS (uname), running systemd services, listening ports (ss)
@@ -143,9 +158,14 @@ def execute_command():
         llm_response = llm_client.generate_command(natural_language, remote_host_context=host_context)
         
         if not llm_response['success']:
+            err = llm_response.get('error', 'Unknown error')
             return jsonify({
                 'error': 'Failed to generate command',
-                'details': llm_response.get('error', 'Unknown error')
+                'details': err,
+                'natural_language_summary': format_error_summary(
+                    'We could not turn your question into a safe command',
+                    err,
+                ),
             }), 500
         
         generated_command = llm_response['command']
@@ -158,7 +178,11 @@ def execute_command():
             return jsonify({
                 'error': 'Command validation failed',
                 'reason': validation_result['reason'],
-                'generated_command': generated_command
+                'generated_command': generated_command,
+                'natural_language_summary': format_error_summary(
+                    'That command is not allowed to run on your servers',
+                    validation_result['reason'],
+                ),
             }), 400
         
         # Normalize command for execution (strip shebang so shell does not try to run !/bin/bash etc.)
@@ -175,18 +199,53 @@ def execute_command():
         
         # Step 6: Log execution
         logger.info(f"Command executed by {current_user.username} on {len(target_servers)} server(s)")
-        
-        return jsonify({
-            'success': True,
-            'original_request': natural_language,
-            'remote_host_context': host_context,
-            'generated_command': command_to_run,
-            'results': execution_results
-        })
+
+        formatted = format_execution_payload(
+            natural_language, command_to_run, execution_results, host_context
+        )
+
+        ai_explain = ""
+        summ = llm_client.summarize_execution_report(
+            natural_language,
+            command_to_run,
+            formatted["formatted_report"],
+        )
+        if summ.get("success") and summ.get("summary"):
+            ai_explain = summ["summary"].strip()
+        else:
+            logger.warning(
+                "AI report explanation unavailable: %s",
+                summ.get("error") or "empty response",
+            )
+
+        payload = {
+            "success": True,
+            "original_request": natural_language,
+            "remote_host_context": host_context,
+            "generated_command": command_to_run,
+            "results": execution_results,
+            "natural_language_summary": formatted["natural_language_summary"],
+            "formatted_report": formatted["formatted_report"],
+            "ai_report_explanation": ai_explain,
+        }
+        if not ai_explain:
+            payload["ai_report_explanation_error"] = (
+                "An AI explanation of the report could not be created. "
+                "Open the technical section below to see the full command output."
+            )
+
+        return jsonify(payload)
         
     except Exception as e:
         logger.error(f"Error in execute_command: {str(e)}", exc_info=True)
-        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+        return jsonify({
+            'error': 'Internal server error',
+            'details': str(e),
+            'natural_language_summary': format_error_summary(
+                'Something went wrong while handling your request',
+                details=str(e),
+            ),
+        }), 500
 
 @app.route('/api/servers', methods=['GET'])
 @login_required

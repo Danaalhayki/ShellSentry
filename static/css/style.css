@@ -1112,6 +1112,146 @@ main {
     display: block;
 }
 
+.generated-command .result-inline-command {
+    margin: 0;
+    padding: 0.75rem;
+    background: rgba(0, 0, 0, 0.06);
+    border-radius: 0.35rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 0.85rem;
+}
+
+[data-theme="dark"] .generated-command .result-inline-command {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.result-summary {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(16, 185, 129, 0.06) 100%);
+    border: 1px solid var(--border-color);
+    border-radius: 0.75rem;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.25rem;
+}
+
+.result-summary-title {
+    margin: 0 0 0.5rem 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.result-summary-text {
+    margin: 0;
+    line-height: 1.6;
+    color: var(--text-color);
+    font-size: 0.95rem;
+}
+
+/* Default: subtle border; purple gradient + glow only on hover (like .example-card) */
+details.ai-report-explanation,
+.result-report-details {
+    margin-bottom: 1.25rem;
+    border: 2px solid var(--border-color);
+    border-radius: 0.75rem;
+    padding: 0.5rem 1rem 1rem;
+    background-color: var(--card-bg);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+details.ai-report-explanation:hover,
+.result-report-details:hover {
+    border: 2px solid transparent;
+    background: linear-gradient(var(--card-bg), var(--card-bg)) padding-box,
+                linear-gradient(90deg, #cc66da, #9929ea) border-box;
+    box-shadow: 0 0 12px rgba(204, 102, 218, 0.5), 0 0 24px rgba(153, 41, 234, 0.35);
+}
+
+[data-theme="dark"] details.ai-report-explanation:hover,
+[data-theme="dark"] .result-report-details:hover {
+    box-shadow: 0 0 14px rgba(204, 102, 218, 0.55), 0 0 28px rgba(153, 41, 234, 0.4);
+}
+
+.ai-report-explanation-title {
+    margin: 0;
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--text-color);
+    padding: 0.35rem 0;
+    user-select: none;
+}
+
+.ai-report-explanation-body {
+    margin-top: 0.5rem;
+    line-height: 1.65;
+    color: var(--text-color);
+    font-size: 0.95rem;
+}
+
+.ai-report-explanation-body p {
+    margin: 0 0 0.5rem 0;
+}
+
+.ai-report-explanation-body p:last-child {
+    margin-bottom: 0;
+}
+
+.ai-report-explanation--muted {
+    opacity: 0.9;
+}
+
+.ai-report-explanation-fallback {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--secondary-color);
+}
+
+.result-original-request {
+    margin-bottom: 1rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+}
+
+.result-original-request strong {
+    display: block;
+    margin-bottom: 0.35rem;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--secondary-color);
+}
+
+.result-original-request p {
+    margin: 0;
+    color: var(--text-color);
+    line-height: 1.5;
+}
+
+.result-report-summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--text-color);
+    padding: 0.35rem 0;
+}
+
+.result-formatted-report {
+    max-height: 22rem;
+    overflow-y: auto;
+    margin-top: 0.5rem;
+}
+
+.result-meta-error {
+    margin-top: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    font-size: 0.875rem;
+    color: var(--text-color);
+}
+
 /* Examples Section */
 .examples-section {
     background-color: var(--card-bg);

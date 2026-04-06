@@ -51,9 +51,11 @@ document.getElementById('commandForm').addEventListener('submit', async function
         const data = await response.json();
         
         if (!response.ok) {
+            const nl = data.natural_language_summary;
             const errorMsg = data.error || 'Execution failed';
-            const errorDetails = data.details ? `\n\nDetails: ${data.details}` : '';
-            throw new Error(errorMsg + errorDetails);
+            const err = new Error(nl || errorMsg);
+            err.payload = data;
+            throw err;
         }
         
         // Display results
@@ -79,6 +81,16 @@ document.getElementById('commandForm').addEventListener('submit', async function
                     <span class="result-status error">Failed</span>
                 </div>
                 <div class="result-error">${escapeHtml(errorMessage).replace(/\n/g, '<br>')}</div>
+                ${error.payload && (error.payload.reason || error.payload.details) ? `
+                <div class="result-meta-error">
+                    ${error.payload.reason ? `<div><strong>Reason:</strong> ${escapeHtml(error.payload.reason)}</div>` : ''}
+                    ${error.payload.details ? `<div style="margin-top:0.35rem;"><strong>Details:</strong> ${escapeHtml(error.payload.details)}</div>` : ''}
+                </div>` : ''}
+                ${error.payload && error.payload.generated_command ? `
+                <div class="generated-command" style="margin-top:1rem;">
+                    <strong>Generated command (not run)</strong>
+                    <pre class="result-inline-command">${escapeHtml(error.payload.generated_command)}</pre>
+                </div>` : ''}
                 <div class="troubleshooting-tips">
                     <strong>💡 Troubleshooting Tips:</strong>
                     <ul>
@@ -107,78 +119,37 @@ function displayResults(data) {
     const resultsContainer = document.getElementById('resultsContainer');
     
     let html = '';
-    
-    // Show generated command
-    if (data.generated_command) {
+
+    if (data.natural_language_summary) {
         html += `
-            <div class="generated-command">
-                <strong>Generated Bash Command:</strong>
-                <code>${escapeHtml(data.generated_command)}</code>
+            <div class="result-summary">
+                <h4 class="result-summary-title">What happened (simple explanation)</h4>
+                <p class="result-summary-text">${escapeHtml(data.natural_language_summary)}</p>
             </div>
         `;
     }
-    
-    // Show original request
-    if (data.original_request) {
+
+    if (data.ai_report_explanation) {
         html += `
-            <div style="margin-bottom: 1rem; color: var(--secondary-color);">
-                <strong>Original Request:</strong> ${escapeHtml(data.original_request)}
+            <details class="ai-report-explanation">
+                <summary class="ai-report-explanation-title">Explanation of the report</summary>
+                <div class="ai-report-explanation-body">${formatAiExplanationText(data.ai_report_explanation)}</div>
+            </details>
+        `;
+    } else if (data.ai_report_explanation_error) {
+        html += `
+            <div class="ai-report-explanation ai-report-explanation--muted">
+                <p class="ai-report-explanation-fallback">${escapeHtml(data.ai_report_explanation_error)}</p>
             </div>
         `;
     }
-    
-    // Show results for each server
-    if (data.results && typeof data.results === 'object') {
-        for (const [server, result] of Object.entries(data.results)) {
-            const isSuccess = result.success !== false;
-            const statusClass = isSuccess ? 'success' : 'error';
-            const statusText = isSuccess ? 'Success' : 'Failed';
-            
-            html += `
-                <div class="result-card">
-                    <div class="result-card-header">
-                        <span class="result-server">${escapeHtml(server)}</span>
-                        <span class="result-status ${statusClass}">${statusText}</span>
-                    </div>
-                    
-                    ${result.error ? `
-                        <div class="result-error">
-                            <strong>Error:</strong> ${escapeHtml(result.error)}
-                        </div>
-                    ` : ''}
-                    
-                    ${result.stdout ? `
-                        <div class="result-content">
-                            <strong>Standard Output:</strong>
-                            <div class="result-output">${escapeHtml(result.stdout)}</div>
-                        </div>
-                    ` : ''}
-                    
-                    ${result.stderr ? `
-                        <div class="result-content">
-                            <strong>Standard Error:</strong>
-                            <div class="result-error">${escapeHtml(result.stderr)}</div>
-                        </div>
-                    ` : ''}
-                    
-                    ${result.exit_code !== undefined ? `
-                        <div style="margin-top: 0.5rem; color: var(--secondary-color); font-size: 0.875rem;">
-                            Exit Code: ${result.exit_code}
-                        </div>
-                    ` : ''}
-                </div>
-            `;
-        }
-    } else if (data.error) {
+
+    if (data.formatted_report) {
         html += `
-            <div class="result-card">
-                <div class="result-card-header">
-                    <span class="result-server">Error</span>
-                    <span class="result-status error">Failed</span>
-                </div>
-                <div class="result-error">${escapeHtml(data.error)}</div>
-                ${data.details ? `<div class="result-error" style="margin-top: 0.5rem;">${escapeHtml(data.details)}</div>` : ''}
-            </div>
+            <details class="result-report-details">
+                <summary class="result-report-summary">Technical report (raw command output)</summary>
+                <pre class="result-output result-formatted-report" role="region">${escapeHtml(data.formatted_report)}</pre>
+            </details>
         `;
     }
     
@@ -190,5 +161,15 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+/** Turn AI plain text into safe HTML: paragraphs and line breaks, no raw HTML. */
+function formatAiExplanationText(text) {
+    if (!text) return '';
+    const blocks = text.split(/\n\n+/).map((p) => p.trim()).filter(Boolean);
+    if (blocks.length === 0) {
+        return `<p>${escapeHtml(text)}</p>`;
+    }
+    return blocks.map((p) => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`).join('');
 }
 

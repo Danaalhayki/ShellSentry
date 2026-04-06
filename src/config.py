@@ -43,5 +43,7 @@ class Config:
     
     # Security Settings
     ALLOW_ROOT_EXECUTION = os.environ.get('ALLOW_ROOT_EXECUTION', 'false').lower() == 'true'
+    # When true (default), only non-mutating / inspection commands may run on remote hosts.
+    READ_ONLY_EXECUTION = os.environ.get('READ_ONLY_EXECUTION', 'true').lower() == 'true'
     LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
 

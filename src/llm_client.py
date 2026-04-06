@@ -217,3 +217,91 @@ Now convert this request to a Bash command:"""
         # Similar to OpenAI but may need adjustments
         return self._call_openai_api(system_prompt, user_prompt)
 
+    def summarize_execution_report(
+        self,
+        user_question: str,
+        command_run: str,
+        report_text: str,
+        max_report_chars: int = 14000,
+    ):
+        """
+        Ask the LLM to explain the formatted execution report in plain language
+        for non-technical readers.
+        """
+        if not self.api_key:
+            return {"success": False, "summary": "", "error": "LLM API key not configured"}
+
+        rt = (report_text or "").strip()
+        if len(rt) > max_report_chars:
+            rt = rt[: max_report_chars - 80] + "\n\n[… report shortened for the assistant …]"
+
+        system_prompt = """You are a clear, friendly assistant helping someone who is NOT a Linux or IT expert.
+
+You will see:
+- What the user asked for in everyday language
+- The command that was run on remote computer(s)
+- A technical report with command output, exit codes, and errors
+
+Your job:
+1. Explain what the report means in simple, readable language (short paragraphs; bullets are OK).
+2. Say what happened on each computer when there are several — in plain words.
+3. Call out the important facts (numbers, names, errors) without copying the whole raw log.
+4. If something failed, say what went wrong in everyday terms.
+5. Do not invent information that is not supported by the report. If the report is empty or unclear, say so.
+6. Do not use Markdown headings with # symbols. You may use **bold** sparingly for key facts if helpful.
+7. Never wrap the whole answer in a code block."""
+
+        user_prompt = f"""What the user asked (their words):
+{user_question.strip()}
+
+Command that ran on the remote machine(s):
+{command_run.strip()}
+
+--- BEGIN REPORT ---
+{rt}
+--- END REPORT ---
+
+Write the explanation now, in plain language."""
+
+        try:
+            if self.api_type == "openai" or "openai" in self.api_base.lower():
+                return self._summarize_openai(system_prompt, user_prompt)
+            return self._summarize_openai(system_prompt, user_prompt)
+        except Exception as e:
+            logger.error(f"LLM summarize_execution_report: {str(e)}", exc_info=True)
+            return {"success": False, "summary": "", "error": str(e)}
+
+    def _summarize_openai(self, system_prompt: str, user_prompt: str):
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": 0.35,
+            "max_tokens": 1000,
+        }
+        response = requests.post(
+            f"{self.api_base}/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=90,
+        )
+        if response.status_code != 200:
+            err = response.text[:400]
+            try:
+                err = response.json().get("error", {}).get("message", err)
+            except Exception:
+                pass
+            logger.error(f"summarize_execution_report API error: {response.status_code} {err}")
+            return {"success": False, "summary": "", "error": f"API error: {err}"}
+
+        data = response.json()
+        text = data["choices"][0]["message"]["content"].strip()
+        text = text.replace("```markdown", "").replace("```", "").strip()
+        return {"success": True, "summary": text, "error": ""}
+
