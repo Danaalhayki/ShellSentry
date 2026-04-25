@@ -58,13 +58,19 @@ class LLMClient:
             + "\n\n".join(blocks)
         )
 
-    def generate_command(self, natural_language_input, remote_host_context=None):
+    def generate_command(
+        self,
+        natural_language_input,
+        remote_host_context=None,
+        rag_context_text: str = "",
+    ):
         """
         Generate Bash command from natural language input
         
         Args:
             natural_language_input: User's natural language request
             remote_host_context: Optional dict host -> probe result from SSHExecutor.probe_host_context
+            rag_context_text: Optional retrieved command examples from RAG layer
             
         Returns:
             dict: {'success': bool, 'command': str, 'error': str}
@@ -89,6 +95,7 @@ Rules:
 7. When remote host context is provided (OS, running services, listening ports), prefer command-line flags, paths, and tools that match that environment; if a service (e.g. nginx, sshd) is visible in the snapshot, prefer inspecting that stack when the user asks about services or ports
 8. Output raw shell only: never wrap the command in backticks (`) or markdown.
 9. The app already runs your command on the target host via SSH; do not use ssh/scp to reach that host unless the user explicitly asks to SSH from the remote to another machine.
+10. If trusted grounding examples are provided, prefer commands and patterns from them unless there is a strong reason not to.
 
 Examples:
 - "Show active connections" -> "netstat -nlutp"
@@ -98,11 +105,14 @@ Examples:
 
 Now convert this request to a Bash command:"""
         
+        prompt_blocks = []
         ctx_block = self._format_remote_host_context(remote_host_context)
         if ctx_block:
-            user_prompt = f"{ctx_block}\n\nUser request:\n{natural_language_input}"
-        else:
-            user_prompt = natural_language_input
+            prompt_blocks.append(ctx_block)
+        if rag_context_text:
+            prompt_blocks.append(rag_context_text.strip())
+        prompt_blocks.append(f"User request:\n{natural_language_input}")
+        user_prompt = "\n\n".join(prompt_blocks).strip()
         
         try:
             if self.api_type == 'openai' or 'openai' in self.api_base.lower():

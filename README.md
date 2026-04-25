@@ -6,6 +6,7 @@ A secure web-based system that translates natural language requests into Linux B
 
 - 🔐 **User Authentication**: Secure login and registration system
 - 🤖 **LLM Integration**: Converts natural language to Bash commands using OpenAI/LLaMA APIs
+- 🧠 **RAG Grounding Layer**: Retrieves trusted Bash examples from a vector index before LLM generation
 - 🛡️ **Multi-Layer Security**: 
   - Input validation and prompt sanitization
   - Command whitelist/blacklist validation
@@ -78,6 +79,7 @@ The application will be available at `http://localhost:5001`
 - **[QUICKSTART.md](MdFiles/QUICKSTART.md)** - Quick start guide with step-by-step setup
 - **[LLM_SETUP.md](MdFiles/LLM_SETUP.md)** - Comprehensive guide for setting up LLM (local or cloud)
 - **[projectDescription.md](MdFiles/projectDescription.md)** - Detailed project description and architecture
+- **[RAG_SETUP.md](MdFiles/RAG_SETUP.md)** - Retrieval-Augmented Generation pipeline details
 
 ## Configuration
 
