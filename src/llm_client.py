@@ -2,10 +2,26 @@ import json
 import re
 import time
 import requests
+from typing import Optional
 from .logger import setup_logger
 from .config import Config
 
 logger = setup_logger()
+
+
+def _retry_after_seconds(response) -> Optional[int]:
+    """Parse Retry-After header (seconds) if present and sane."""
+    raw = (response.headers or {}).get("Retry-After")
+    if not raw:
+        return None
+    try:
+        sec = int(float(str(raw).strip().split()[0]))
+        if 0 < sec <= 300:
+            return sec
+    except (ValueError, TypeError, IndexError):
+        pass
+    return None
+
 
 class LLMClient:
     """Client for interacting with LLM API (OpenAI/LLaMA)"""
@@ -88,13 +104,13 @@ class LLMClient:
 Rules:
 1. Generate ONLY the Bash command/script, no explanations
 2. Use safe commands only (no rm -rf, format, etc.)
-3. For multi-server operations, create a simple script
+3. Multi-server work is done by the app: the user picks servers in the UI. You output ONE command that will be run on each target (e.g. `df -h`), never `ssh`, `scp`, `hosts.txt`, or `for` loops to fan out to hosts
 4. Do not include sudo unless explicitly requested
 5. Output should be executable Bash code only
 6. If the request is unclear or unsafe, return "ERROR: Request unclear or potentially unsafe"
 7. When remote host context is provided (OS, running services, listening ports), prefer command-line flags, paths, and tools that match that environment; if a service (e.g. nginx, sshd) is visible in the snapshot, prefer inspecting that stack when the user asks about services or ports
 8. Output raw shell only: never wrap the command in backticks (`) or markdown.
-9. The app already runs your command on the target host via SSH; do not use ssh/scp to reach that host unless the user explicitly asks to SSH from the remote to another machine.
+9. The app already runs your command on the target host via SSH. Never use `ssh`, `scp`, or `rsync` in the command (read-only mode blocks them). The only exception is if the user explicitly needs to jump from the remote to another host.
 10. If trusted grounding examples are provided, prefer commands and patterns from them unless there is a strong reason not to.
 
 Examples:
@@ -144,10 +160,10 @@ Now convert this request to a Bash command:"""
             'max_tokens': 500
         }
         
-        # Retry logic for network issues
-        max_retries = 3
-        retry_delay = 1  # seconds
-        
+        # Retries: transient network issues + HTTP 429 (TPM / rate limit; wait for window to free)
+        max_retries = 5
+        retry_delay = 1  # seconds, for network backoff
+
         for attempt in range(max_retries):
             try:
                 response = requests.post(
@@ -156,10 +172,11 @@ Now convert this request to a Bash command:"""
                     json=payload,
                     timeout=60  # Increased timeout
                 )
-                break  # Success, exit retry loop
             except requests.exceptions.Timeout:
                 if attempt < max_retries - 1:
-                    logger.warning(f"LLM API timeout (attempt {attempt + 1}/{max_retries}), retrying...")
+                    logger.warning(
+                        f"LLM API timeout (attempt {attempt + 1}/{max_retries}), retrying..."
+                    )
                     time.sleep(retry_delay * (attempt + 1))  # Exponential backoff
                     continue
                 else:
@@ -170,7 +187,9 @@ Now convert this request to a Bash command:"""
                     }
             except requests.exceptions.ConnectionError as e:
                 if attempt < max_retries - 1:
-                    logger.warning(f"LLM API connection error (attempt {attempt + 1}/{max_retries}): {str(e)}, retrying...")
+                    logger.warning(
+                        f"LLM API connection error (attempt {attempt + 1}/{max_retries}): {str(e)}, retrying..."
+                    )
                     time.sleep(retry_delay * (attempt + 1))
                     continue
                 else:
@@ -185,41 +204,60 @@ Now convert this request to a Bash command:"""
                     'success': False,
                     'error': f'Request error: {str(e)}'
                 }
-        
-        if response.status_code == 200:
-            data = response.json()
-            command = data['choices'][0]['message']['content'].strip()
-            
-            # Clean up the command (remove markdown code blocks if present)
-            command = command.replace('```bash', '').replace('```', '').strip()
-            command = command.replace('```sh', '').strip()
-            
-            # Remove leading $ or # prompts
-            command = re.sub(r'^[\$#]\s*', '', command)
-            
-            # Strip Markdown inline backticks (`ping ...`) so validation sees "ping", not "`ping"
-            command = command.strip()
-            while command.startswith('`'):
-                command = command[1:].lstrip()
-            while command.endswith('`'):
-                command = command[:-1].rstrip()
-            command = command.strip()
-            
-            return {
-                'success': True,
-                'command': command
-            }
-        else:
+
+            if response.status_code == 200:
+                data = response.json()
+                command = data['choices'][0]['message']['content'].strip()
+
+                # Clean up the command (remove markdown code blocks if present)
+                command = command.replace('```bash', '').replace('```', '').strip()
+                command = command.replace('```sh', '').strip()
+
+                # Remove leading $ or # prompts
+                command = re.sub(r'^[\$#]\s*', '', command)
+
+                # Strip Markdown inline backticks (`ping ...`) so validation sees "ping", not "`ping"
+                command = command.strip()
+                while command.startswith('`'):
+                    command = command[1:].lstrip()
+                while command.endswith('`'):
+                    command = command[:-1].rstrip()
+                command = command.strip()
+
+                return {
+                    'success': True,
+                    'command': command
+                }
+
+            if response.status_code == 429 and attempt < max_retries - 1:
+                ra = _retry_after_seconds(response)
+                wait = ra if ra is not None else min(5 * (2**attempt), 60)
+                logger.warning(
+                    "LLM API rate limited (429), waiting %s s (attempt %s/%s)",
+                    wait,
+                    attempt + 1,
+                    max_retries,
+                )
+                time.sleep(wait)
+                continue
+
             error_text = response.text
             try:
                 error_json = response.json()
                 error_text = error_json.get('error', {}).get('message', error_text)
-            except:
+            except Exception:
                 pass
-            logger.error(f"OpenAI API error: {response.status_code} - {error_text}")
+            logger.error(
+                f"OpenAI API error: {response.status_code} - {error_text[:300]}"
+            )
+            if response.status_code == 429:
+                extra = " Wait a bit or raise your API tier; each request also sends host context, which uses many tokens."
+                err = f"API returned status 429: {error_text[:200]}.{extra}"
+            else:
+                err = f"API returned status {response.status_code}: {error_text[:200]}"
             return {
                 'success': False,
-                'error': f'API returned status {response.status_code}: {error_text[:200]}'
+                'error': err
             }
     
     def _call_openai_compatible_api(self, system_prompt, user_prompt):
@@ -295,23 +333,38 @@ Write the explanation now, in plain language."""
             "temperature": 0.35,
             "max_tokens": 1000,
         }
-        response = requests.post(
-            f"{self.api_base}/chat/completions",
-            headers=headers,
-            json=payload,
-            timeout=90,
+        max_retries = 4
+        response = None
+        for attempt in range(max_retries):
+            response = requests.post(
+                f"{self.api_base}/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=90,
+            )
+            if response.status_code == 200:
+                data = response.json()
+                text = data["choices"][0]["message"]["content"].strip()
+                text = text.replace("```markdown", "").replace("```", "").strip()
+                return {"success": True, "summary": text, "error": ""}
+            if response.status_code == 429 and attempt < max_retries - 1:
+                ra = _retry_after_seconds(response)
+                wait = ra if ra is not None else min(5 * (2**attempt), 60)
+                logger.warning(
+                    "summarize_execution_report: rate limited (429), waiting %s s", wait
+                )
+                time.sleep(wait)
+                continue
+            break
+        if response is None:
+            return {"success": False, "summary": "", "error": "No response from API"}
+        err = response.text[:400]
+        try:
+            err = response.json().get("error", {}).get("message", err)
+        except Exception:
+            pass
+        logger.error(
+            f"summarize_execution_report API error: {response.status_code} {err}"
         )
-        if response.status_code != 200:
-            err = response.text[:400]
-            try:
-                err = response.json().get("error", {}).get("message", err)
-            except Exception:
-                pass
-            logger.error(f"summarize_execution_report API error: {response.status_code} {err}")
-            return {"success": False, "summary": "", "error": f"API error: {err}"}
-
-        data = response.json()
-        text = data["choices"][0]["message"]["content"].strip()
-        text = text.replace("```markdown", "").replace("```", "").strip()
-        return {"success": True, "summary": text, "error": ""}
+        return {"success": False, "summary": "", "error": f"API error: {err}"}
 
