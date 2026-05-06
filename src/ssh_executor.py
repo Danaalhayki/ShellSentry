@@ -292,12 +292,24 @@ class SSHExecutor:
                     'exit_code': connect_error.get('exit_code', -1)
                 }
             
-            # Execute command with increased timeout
-            # Use heredoc for multi-line scripts so the remote shell receives the full script
-            # without quoting/truncation issues (avoids "syntax error near unexpected token 'done'")
+            # Execute command with increased timeout.
+            # For multi-line scripts, persist a copy on the remote host for auditing/reuse,
+            # then execute that saved file.
             if '\n' in command:
-                heredoc_marker = 'SHELLSENTRY_EOF'
-                command = f"bash -s << '{heredoc_marker}'\n{command}\n{heredoc_marker}"
+                wrapper_marker = 'SHELLSENTRY_WRAPPER_EOF'
+                script_marker = 'SHELLSENTRY_SCRIPT_EOF'
+                command = (
+                    f"SHELLSENTRY_SCRIPT_DIR=\"$HOME/ShellSentryScripts\"\n"
+                    f"mkdir -p \"$SHELLSENTRY_SCRIPT_DIR\"\n"
+                    f"SHELLSENTRY_SCRIPT_PATH=\"$SHELLSENTRY_SCRIPT_DIR/script_$(date +%Y%m%d_%H%M%S)_$$.sh\"\n"
+                    f"cat > \"$SHELLSENTRY_SCRIPT_PATH\" << '{script_marker}'\n"
+                    f"{command}\n"
+                    f"{script_marker}\n"
+                    f"chmod 700 \"$SHELLSENTRY_SCRIPT_PATH\"\n"
+                    f"bash \"$SHELLSENTRY_SCRIPT_PATH\"\n"
+                    f"echo \"[ShellSentry] Script saved to: $SHELLSENTRY_SCRIPT_PATH\"\n"
+                )
+                command = f"bash -s << '{wrapper_marker}'\n{command}\n{wrapper_marker}"
             stdin, stdout, stderr = ssh.exec_command(command, timeout=60)
             
             # Wait for command to complete
