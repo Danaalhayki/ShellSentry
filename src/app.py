@@ -36,6 +36,30 @@ rag_pipeline = RagPipeline()
 logger = setup_logger()
 
 
+def _normalize_intent_text(text):
+    """
+    Normalize punctuation/spacing so intent matching works with unicode dashes
+    like Re‑execute / Re–execute / Re—execute.
+    """
+    if not text:
+        return ''
+    normalized = str(text)
+    for ch in ('\u2010', '\u2011', '\u2012', '\u2013', '\u2014', '\u2212'):
+        normalized = normalized.replace(ch, '-')
+    normalized = re.sub(r'\s+', ' ', normalized).strip()
+    return normalized
+
+
+def _safe_text_for_log(text):
+    """Prevent Windows cp1252 console logger crashes on non-encodable chars."""
+    if not text:
+        return ''
+    try:
+        return str(text).encode('cp1252', errors='replace').decode('cp1252')
+    except Exception:
+        return str(text).encode('ascii', errors='replace').decode('ascii')
+
+
 def _extract_script_name(text):
     """Extract archive script filename from user request."""
     if not text:
@@ -49,14 +73,22 @@ def _detect_archive_intent(text):
     Detect explicit script-archive actions from natural language.
     Returns dict with action/list scope/script_name.
     """
-    low = (text or '').lower()
+    normalized_text = _normalize_intent_text(text)
+    low = normalized_text.lower()
     has_script_word = any(k in low for k in ('script', 'scripts', 'سكريبت', 'سكربت'))
     archive_hint = any(k in low for k in ('shellsentryscripts', 'saved script', 'saved scripts', 'المحفوظ'))
     wants_list = any(k in low for k in ('list', 'show', 'display', 'ls', 'اعرض', 'عرض', 'قائمة'))
-    wants_run = any(k in low for k in ('rerun', 're-run', 'reexecute', 're-execute', 'run again', 'execute saved', 'شغل', 'اعد تنفيذ', 'أعد تنفيذ'))
+    wants_run = any(
+        k in low for k in (
+            'rerun', 're-run', 're run',
+            'reexecute', 're-execute', 're execute',
+            'run again', 'execute saved',
+            'شغل', 'اعد تنفيذ', 'أعد تنفيذ',
+        )
+    )
     wants_explain = any(k in low for k in ('explain', 'what does', 'شرح', 'فسر'))
 
-    script_name = _extract_script_name(text)
+    script_name = _extract_script_name(normalized_text)
 
     # Allow direct "explain/run <file>.sh" even without explicit "saved script" wording.
     if wants_run and script_name:
@@ -229,8 +261,53 @@ def execute_command():
                     ),
                 }), 400
 
+            # Search selected servers and only re-execute where the script exists.
+            servers_with_script, servers_missing_script = ssh_executor.get_servers_having_script(
+                target_servers, script_name
+            )
+            if not servers_with_script:
+                return jsonify({
+                    'error': 'Saved script not found on selected servers',
+                    'details': (
+                        f"Script `{script_name}` was not found in "
+                        f"$HOME/{app.config['SCRIPT_ARCHIVE_DIR_NAME']} on the selected servers."
+                    ),
+                    'natural_language_summary': format_error_summary(
+                        'Could not find that saved script on your selected servers.',
+                    ),
+                }), 400
+
+            # Security gate: before re-execution, validate script content under current policy.
+            # This preserves read-only restrictions and prevents modified/tampered scripts
+            # from being re-executed.
+            script_search = ssh_executor.find_saved_script_content_across_servers(
+                servers_with_script, script_name
+            )
+            if not script_search.get('success'):
+                reason = script_search.get('error', 'Could not read script content for validation')
+                return jsonify({
+                    'error': 'Failed to validate saved script',
+                    'details': reason,
+                    'natural_language_summary': format_error_summary(
+                        'Could not validate the saved script before execution',
+                        reason=reason,
+                    ),
+                }), 400
+
+            script_validation = command_validator.validate(script_search.get('content', ''))
+            if not script_validation.get('valid'):
+                reason = script_validation.get('reason', 'Policy validation failed')
+                return jsonify({
+                    'error': 'Saved script is blocked by security policy',
+                    'reason': reason,
+                    'natural_language_summary': format_error_summary(
+                        'This saved script is not allowed to run under current restrictions',
+                        reason=reason,
+                    ),
+                }), 400
+
             execution_results = ssh_executor.execute_saved_script(
-                target_servers,
+                servers_with_script,
                 script_name,
                 current_user.username,
                 current_user.id,
@@ -258,6 +335,8 @@ def execute_command():
                 "natural_language_summary": formatted["natural_language_summary"],
                 "formatted_report": formatted["formatted_report"],
             }
+            if servers_missing_script:
+                payload["missing_script_servers"] = servers_missing_script
             if script_explanation:
                 payload["script_explanation"] = script_explanation
             return jsonify(payload)
@@ -314,7 +393,7 @@ def execute_command():
         # Step 2: SSH snapshot before LLM: OS (uname), running systemd services, listening ports (ss)
         host_context = ssh_executor.probe_host_context(target_servers)
         logger.info(
-            f"User {current_user.username} requested: {natural_language} "
+            f"User {current_user.username} requested: {_safe_text_for_log(natural_language)} "
             f"(host context probe: {len(host_context)} host(s))"
         )
 

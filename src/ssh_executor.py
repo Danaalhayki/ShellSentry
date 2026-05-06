@@ -437,10 +437,41 @@ class SSHExecutor:
             "if [ ! -f \"$SCRIPT_PATH\" ]; then "
             "echo \"Script not found: $SCRIPT_PATH\" 1>&2; exit 2; "
             "fi; "
-            "chmod 700 \"$SCRIPT_PATH\"; "
             "bash \"$SCRIPT_PATH\""
         )
         return self.execute_on_servers(run_cmd, servers, username, user_id, original_request)
+
+    def get_servers_having_script(self, servers, script_name):
+        """Return two lists: servers_with_script, servers_missing_script."""
+        if not servers:
+            return [], []
+        if not self._valid_script_filename(script_name):
+            return [], list(servers)
+
+        have = []
+        missing = []
+        for server in servers:
+            ssh, connect_error = self._open_ssh(server)
+            if connect_error is not None:
+                missing.append(server)
+                continue
+            try:
+                archive_dir = f"$HOME/{self.script_archive_dir_name}"
+                check_cmd = (
+                    f"ARCHIVE_DIR=\"{archive_dir}\"; "
+                    f"SCRIPT_PATH=\"$ARCHIVE_DIR/{script_name}\"; "
+                    "[ -f \"$SCRIPT_PATH\" ]"
+                )
+                exit_code, _, _ = self._exec_remote_text(ssh, check_cmd, timeout=15)
+                if exit_code == 0:
+                    have.append(server)
+                else:
+                    missing.append(server)
+            except Exception:
+                missing.append(server)
+            finally:
+                ssh.close()
+        return have, missing
 
     def get_saved_script_content(self, server, script_name):
         """Read one saved script content from a single server for explanation."""
