@@ -46,4 +46,6 @@ class Config:
     # When true (default), only non-mutating / inspection commands may run on remote hosts.
     READ_ONLY_EXECUTION = os.environ.get('READ_ONLY_EXECUTION', 'true').lower() == 'true'
     LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
+    SCRIPT_ARCHIVE_DIR_NAME = os.environ.get('SCRIPT_ARCHIVE_DIR_NAME', 'ShellSentryScripts').strip() or 'ShellSentryScripts'
+    SCRIPT_ARCHIVE_MAX_LIST = int(os.environ.get('SCRIPT_ARCHIVE_MAX_LIST', '50'))
 

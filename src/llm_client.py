@@ -368,3 +368,67 @@ Write the explanation now, in plain language."""
         )
         return {"success": False, "summary": "", "error": f"API error: {err}"}
 
+    def explain_script(self, script_name: str, script_content: str):
+        """Explain a saved shell script in plain language."""
+        if not self.api_key:
+            return {"success": False, "explanation": "", "error": "LLM API key not configured"}
+
+        script_text = (script_content or "").strip()
+        if not script_text:
+            return {"success": False, "explanation": "", "error": "Script content is empty"}
+        if len(script_text) > 10000:
+            script_text = script_text[:9900] + "\n\n# ... truncated ..."
+
+        system_prompt = """You explain Bash scripts for non-expert users.
+
+Rules:
+1. Explain what the script does step-by-step in simple words.
+2. Mention any potentially sensitive/risky parts (file writes, deletes, network changes, privilege use).
+3. Keep it concise and practical.
+4. Do not invent behavior not present in the script.
+5. Do not wrap your answer in code blocks."""
+
+        user_prompt = f"""Script name:
+{script_name}
+
+Script content:
+{script_text}
+
+Explain this script now."""
+
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                "temperature": 0.2,
+                "max_tokens": 500,
+            }
+            response = requests.post(
+                f"{self.api_base}/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=60,
+            )
+            if response.status_code != 200:
+                err = response.text[:400]
+                try:
+                    err = response.json().get("error", {}).get("message", err)
+                except Exception:
+                    pass
+                return {"success": False, "explanation": "", "error": f"API error: {err}"}
+
+            data = response.json()
+            text = data["choices"][0]["message"]["content"].strip()
+            text = text.replace("```markdown", "").replace("```", "").strip()
+            return {"success": True, "explanation": text, "error": ""}
+        except Exception as e:
+            logger.error(f"explain_script error: {str(e)}", exc_info=True)
+            return {"success": False, "explanation": "", "error": str(e)}
+

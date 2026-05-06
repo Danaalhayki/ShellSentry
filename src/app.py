@@ -11,6 +11,7 @@ from .logger import setup_logger
 from .result_formatter import format_execution_payload, format_error_summary
 from .rag_pipeline import RagPipeline
 import os
+import re
 
 # Get the project root directory (parent of src)
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -33,6 +34,47 @@ command_validator = CommandValidator()
 ssh_executor = SSHExecutor()
 rag_pipeline = RagPipeline()
 logger = setup_logger()
+
+
+def _extract_script_name(text):
+    """Extract archive script filename from user request."""
+    if not text:
+        return None
+    m = re.search(r'\b([A-Za-z0-9._-]+\.sh)\b', text)
+    return m.group(1) if m else None
+
+
+def _detect_archive_intent(text):
+    """
+    Detect explicit script-archive actions from natural language.
+    Returns dict with action/list scope/script_name.
+    """
+    low = (text or '').lower()
+    has_script_word = any(k in low for k in ('script', 'scripts', 'سكريبت', 'سكربت'))
+    archive_hint = any(k in low for k in ('shellsentryscripts', 'saved script', 'saved scripts', 'المحفوظ'))
+    wants_list = any(k in low for k in ('list', 'show', 'display', 'ls', 'اعرض', 'عرض', 'قائمة'))
+    wants_run = any(k in low for k in ('rerun', 're-run', 'reexecute', 're-execute', 'run again', 'execute saved', 'شغل', 'اعد تنفيذ', 'أعد تنفيذ'))
+    wants_explain = any(k in low for k in ('explain', 'what does', 'شرح', 'فسر'))
+
+    script_name = _extract_script_name(text)
+
+    # Allow direct "explain/run <file>.sh" even without explicit "saved script" wording.
+    if wants_run and script_name:
+        return {'action': 'rerun', 'script_name': script_name}
+    if wants_explain and script_name:
+        return {'action': 'explain', 'script_name': script_name}
+
+    if not has_script_word and not archive_hint:
+        return {'action': None}
+
+    if wants_list:
+        scope = 'all'
+        if 'yesterday' in low or 'امس' in low:
+            scope = 'yesterday'
+        elif 'today' in low or 'اليوم' in low:
+            scope = 'today'
+        return {'action': 'list', 'date_scope': scope}
+    return {'action': None}
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -148,6 +190,126 @@ def execute_command():
                     details='Enter host names in the Target Servers box or set REMOTE_SERVERS in your settings file.',
                 ),
             }), 400
+
+        # Built-in script archive actions (list/re-run/explain saved scripts)
+        archive_intent = _detect_archive_intent(natural_language)
+        if archive_intent.get('action') == 'list':
+            date_scope = archive_intent.get('date_scope', 'all')
+            execution_results = ssh_executor.list_saved_scripts(
+                target_servers,
+                current_user.username,
+                current_user.id,
+                natural_language,
+                date_scope=date_scope,
+            )
+            generated_command = (
+                f"List scripts in $HOME/{app.config['SCRIPT_ARCHIVE_DIR_NAME']} "
+                f"(scope: {date_scope}, max: {app.config['SCRIPT_ARCHIVE_MAX_LIST']})"
+            )
+            formatted = format_execution_payload(
+                natural_language, generated_command, execution_results, host_context=None
+            )
+            return jsonify({
+                "success": True,
+                "original_request": natural_language,
+                "generated_command": generated_command,
+                "results": execution_results,
+                "natural_language_summary": formatted["natural_language_summary"],
+                "formatted_report": formatted["formatted_report"],
+            })
+
+        if archive_intent.get('action') == 'rerun':
+            script_name = archive_intent.get('script_name')
+            if not script_name:
+                return jsonify({
+                    'error': 'Script name is required',
+                    'natural_language_summary': format_error_summary(
+                        'Please include the saved script name',
+                        details='Example: Re-run ShellSentry_2026-05-06_13-51-59_123456789.sh',
+                    ),
+                }), 400
+
+            execution_results = ssh_executor.execute_saved_script(
+                target_servers,
+                script_name,
+                current_user.username,
+                current_user.id,
+                natural_language,
+            )
+            generated_command = f"bash $HOME/{app.config['SCRIPT_ARCHIVE_DIR_NAME']}/{script_name}"
+            formatted = format_execution_payload(
+                natural_language, generated_command, execution_results, host_context=None
+            )
+
+            script_explanation = ""
+            sample_server = target_servers[0] if target_servers else None
+            if sample_server:
+                script_data = ssh_executor.get_saved_script_content(sample_server, script_name)
+                if script_data.get('success'):
+                    exp = llm_client.explain_script(script_name, script_data.get('content', ''))
+                    if exp.get('success'):
+                        script_explanation = exp.get('explanation', '').strip()
+
+            payload = {
+                "success": True,
+                "original_request": natural_language,
+                "generated_command": generated_command,
+                "results": execution_results,
+                "natural_language_summary": formatted["natural_language_summary"],
+                "formatted_report": formatted["formatted_report"],
+            }
+            if script_explanation:
+                payload["script_explanation"] = script_explanation
+            return jsonify(payload)
+
+        if archive_intent.get('action') == 'explain':
+            script_name = archive_intent.get('script_name')
+            if not script_name:
+                return jsonify({
+                    'error': 'Script name is required',
+                    'natural_language_summary': format_error_summary(
+                        'Please include the saved script name',
+                        details='Example: Explain ShellSentry_2026-05-06_13-51-59_123456789.sh',
+                    ),
+                }), 400
+
+            script_search = ssh_executor.find_saved_script_content_across_servers(
+                target_servers, script_name
+            )
+            if not script_search.get('success'):
+                reason = script_search.get('error', 'Could not find/read script')
+                return jsonify({
+                    'error': 'Failed to read saved script',
+                    'details': reason,
+                    'natural_language_summary': format_error_summary(
+                        'Could not read that saved script',
+                        reason=reason,
+                    ),
+                }), 400
+
+            exp = llm_client.explain_script(script_name, script_search.get('content', ''))
+            if not exp.get('success'):
+                reason = exp.get('error', 'Could not explain script')
+                return jsonify({
+                    'error': 'Failed to explain script',
+                    'details': reason,
+                    'natural_language_summary': format_error_summary(
+                        'Could not generate the script explanation',
+                        reason=reason,
+                    ),
+                }), 500
+            return jsonify({
+                "success": True,
+                "original_request": natural_language,
+                "generated_command": f"explain {script_name}",
+                "results": {},
+                "natural_language_summary": (
+                    f"Found script `{script_name}` on server {script_search.get('server')}. "
+                    "Here is a plain-language explanation."
+                ),
+                "formatted_report": script_search.get('content', ''),
+                "script_explanation": exp.get('explanation', '').strip(),
+            })
 
         # Step 2: SSH snapshot before LLM: OS (uname), running systemd services, listening ports (ss)
         host_context = ssh_executor.probe_host_context(target_servers)

@@ -144,6 +144,15 @@ function displayResults(data) {
         `;
     }
 
+    if (data.script_explanation) {
+        html += `
+            <details class="ai-report-explanation">
+                <summary class="ai-report-explanation-title">Explanation of the saved script</summary>
+                <div class="ai-report-explanation-body">${formatAiExplanationText(data.script_explanation)}</div>
+            </details>
+        `;
+    }
+
     if (data.formatted_report) {
         html += `
             <details class="result-report-details">

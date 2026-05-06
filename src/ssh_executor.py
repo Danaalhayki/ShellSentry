@@ -1,6 +1,7 @@
 import paramiko
 import os
 import socket
+import re
 from .logger import setup_logger
 from .config import Config
 from .models import db, ExecutionLog
@@ -21,6 +22,8 @@ class SSHExecutor:
         self.ssh_key_path = os.path.expanduser(Config.SSH_KEY_PATH)
         self.ssh_agent_socket = Config.SSH_AGENT_SOCKET
         self.server_credentials = Config.SERVER_CREDENTIALS
+        self.script_archive_dir_name = Config.SCRIPT_ARCHIVE_DIR_NAME
+        self.script_archive_max_list = Config.SCRIPT_ARCHIVE_MAX_LIST
     
     def execute_on_servers(self, command, servers, username, user_id=None, original_request=''):
         """
@@ -299,9 +302,9 @@ class SSHExecutor:
                 wrapper_marker = 'SHELLSENTRY_WRAPPER_EOF'
                 script_marker = 'SHELLSENTRY_SCRIPT_EOF'
                 command = (
-                    f"SHELLSENTRY_SCRIPT_DIR=\"$HOME/ShellSentryScripts\"\n"
+                    f"SHELLSENTRY_SCRIPT_DIR=\"$HOME/{self.script_archive_dir_name}\"\n"
                     f"mkdir -p \"$SHELLSENTRY_SCRIPT_DIR\"\n"
-                    f"SHELLSENTRY_SCRIPT_PATH=\"$SHELLSENTRY_SCRIPT_DIR/script_$(date +%Y%m%d_%H%M%S)_$$.sh\"\n"
+                    f"SHELLSENTRY_SCRIPT_PATH=\"$SHELLSENTRY_SCRIPT_DIR/ShellSentry_$(date +%Y-%m-%d_%H-%M-%S_%N).sh\"\n"
                     f"cat > \"$SHELLSENTRY_SCRIPT_PATH\" << '{script_marker}'\n"
                     f"{command}\n"
                     f"{script_marker}\n"
@@ -379,6 +382,140 @@ class SSHExecutor:
         finally:
             if ssh:
                 ssh.close()
+
+    def _valid_script_filename(self, script_name):
+        """Allow only safe basename-like script names."""
+        if not script_name:
+            return False
+        return re.fullmatch(r'[A-Za-z0-9._-]+\.sh', script_name) is not None
+
+    def list_saved_scripts(self, servers, username, user_id=None, original_request='', date_scope='all'):
+        """
+        List saved ShellSentry scripts from the fixed archive folder on each server.
+        date_scope: all|today|yesterday
+        """
+        if not servers:
+            return {'error': 'No servers specified'}
+
+        date_scope = (date_scope or 'all').strip().lower()
+        if date_scope not in ('all', 'today', 'yesterday'):
+            date_scope = 'all'
+
+        find_filter = ''
+        if date_scope == 'today':
+            find_filter = '-daystart -mtime 0'
+        elif date_scope == 'yesterday':
+            find_filter = '-daystart -mtime 1'
+
+        archive_dir = f"$HOME/{self.script_archive_dir_name}"
+        list_cmd = (
+            f"ARCHIVE_DIR=\"{archive_dir}\"; "
+            "if [ ! -d \"$ARCHIVE_DIR\" ]; then "
+            "echo \"(archive directory not found)\"; exit 0; "
+            "fi; "
+            f"find \"$ARCHIVE_DIR\" -maxdepth 1 -type f -name 'ShellSentry_*.sh' {find_filter} "
+            "-printf '%TY-%Tm-%Td %TH:%TM:%TS | %f\\n' 2>/dev/null | "
+            "sort -r | "
+            f"head -n {int(self.script_archive_max_list)}"
+        )
+        return self.execute_on_servers(list_cmd, servers, username, user_id, original_request)
+
+    def execute_saved_script(self, servers, script_name, username, user_id=None, original_request=''):
+        """Execute an existing saved script by filename on selected servers."""
+        if not servers:
+            return {'error': 'No servers specified'}
+        if not self._valid_script_filename(script_name):
+            return {
+                'error': 'Invalid script name format',
+                'details': 'Script name must look like ShellSentry_YYYY-MM-DD_HH-MM-SS_xxx.sh'
+            }
+
+        archive_dir = f"$HOME/{self.script_archive_dir_name}"
+        run_cmd = (
+            f"ARCHIVE_DIR=\"{archive_dir}\"; "
+            f"SCRIPT_PATH=\"$ARCHIVE_DIR/{script_name}\"; "
+            "if [ ! -f \"$SCRIPT_PATH\" ]; then "
+            "echo \"Script not found: $SCRIPT_PATH\" 1>&2; exit 2; "
+            "fi; "
+            "chmod 700 \"$SCRIPT_PATH\"; "
+            "bash \"$SCRIPT_PATH\""
+        )
+        return self.execute_on_servers(run_cmd, servers, username, user_id, original_request)
+
+    def get_saved_script_content(self, server, script_name):
+        """Read one saved script content from a single server for explanation."""
+        if not self._valid_script_filename(script_name):
+            return {'success': False, 'error': 'Invalid script name format', 'content': ''}
+
+        ssh, connect_error = self._open_ssh(server)
+        if connect_error is not None:
+            return {'success': False, 'error': connect_error.get('error', 'SSH connection failed'), 'content': ''}
+
+        try:
+            archive_dir = f"$HOME/{self.script_archive_dir_name}"
+            read_cmd = (
+                f"ARCHIVE_DIR=\"{archive_dir}\"; "
+                f"SCRIPT_PATH=\"$ARCHIVE_DIR/{script_name}\"; "
+                "if [ ! -f \"$SCRIPT_PATH\" ]; then "
+                "echo \"Script not found: $SCRIPT_PATH\" 1>&2; exit 2; "
+                "fi; "
+                "cat \"$SCRIPT_PATH\""
+            )
+            exit_code, out, err = self._exec_remote_text(ssh, read_cmd, timeout=25)
+            if exit_code != 0:
+                return {'success': False, 'error': err or f'Failed to read script (exit {exit_code})', 'content': ''}
+            return {'success': True, 'error': '', 'content': out}
+        except Exception as e:
+            return {'success': False, 'error': str(e), 'content': ''}
+        finally:
+            ssh.close()
+
+    def find_saved_script_content_across_servers(self, servers, script_name):
+        """
+        Search servers in order and return the first server that has the script content.
+        """
+        if not servers:
+            return {
+                'success': False,
+                'error': 'No servers specified',
+                'server': None,
+                'content': '',
+                'checked_servers': [],
+            }
+        if not self._valid_script_filename(script_name):
+            return {
+                'success': False,
+                'error': 'Invalid script name format',
+                'server': None,
+                'content': '',
+                'checked_servers': list(servers),
+            }
+
+        checked = []
+        errors = []
+        for server in servers:
+            checked.append(server)
+            data = self.get_saved_script_content(server, script_name)
+            if data.get('success'):
+                return {
+                    'success': True,
+                    'error': '',
+                    'server': server,
+                    'content': data.get('content', ''),
+                    'checked_servers': checked,
+                }
+            errors.append(f"{server}: {data.get('error', 'not found')}")
+
+        return {
+            'success': False,
+            'error': (
+                f"Script '{script_name}' was not found on selected servers. "
+                f"Checked: {', '.join(checked)}. Details: {' | '.join(errors)}"
+            ),
+            'server': None,
+            'content': '',
+            'checked_servers': checked,
+        }
     
     def _log_execution(self, username, user_id, original_request, command, servers, results):
         """Log command execution to database"""
