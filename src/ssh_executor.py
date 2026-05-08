@@ -24,6 +24,7 @@ class SSHExecutor:
         self.server_credentials = Config.SERVER_CREDENTIALS
         self.script_archive_dir_name = Config.SCRIPT_ARCHIVE_DIR_NAME
         self.script_archive_max_list = Config.SCRIPT_ARCHIVE_MAX_LIST
+        self.safe_cron_tag_prefix = Config.SAFE_CRON_TAG_PREFIX
     
     def execute_on_servers(self, command, servers, username, user_id=None, original_request=''):
         """
@@ -547,6 +548,46 @@ class SSHExecutor:
             'content': '',
             'checked_servers': checked,
         }
+
+    def list_managed_cron_entries(self, servers, username, user_id=None, original_request=''):
+        """List only ShellSentry-managed crontab entries."""
+        if not servers:
+            return {'error': 'No servers specified'}
+        cmd = (
+            "(crontab -l 2>/dev/null || true) | "
+            f"grep '{self.safe_cron_tag_prefix}:' || "
+            "echo '(no managed cron entries)'"
+        )
+        return self.execute_on_servers(cmd, servers, username, user_id, original_request)
+
+    def schedule_saved_script_cron(self, servers, script_name, cron_expr, username, user_id=None, original_request=''):
+        """
+        Add/update a managed cron entry for one saved script.
+        Only affects this script's managed line.
+        """
+        if not servers:
+            return {'error': 'No servers specified'}
+        if not self._valid_script_filename(script_name):
+            return {'error': 'Invalid script name format'}
+
+        tag = f"{self.safe_cron_tag_prefix}:{script_name}"
+        archive_dir = f"$HOME/{self.script_archive_dir_name}"
+        cmd = (
+            f"ARCHIVE_DIR=\"{archive_dir}\"; "
+            f"SCRIPT_PATH=\"$ARCHIVE_DIR/{script_name}\"; "
+            "if [ ! -f \"$SCRIPT_PATH\" ]; then "
+            "echo \"Script not found: $SCRIPT_PATH\" 1>&2; exit 2; "
+            "fi; "
+            "TMP_CRON_FILE=$(mktemp); "
+            "(crontab -l 2>/dev/null || true) | grep -v "
+            f"'# {tag}$' > \"$TMP_CRON_FILE\"; "
+            f"CRON_LINE='{cron_expr} bash \"$HOME/{self.script_archive_dir_name}/{script_name}\" # {tag}'; "
+            "echo \"$CRON_LINE\" >> \"$TMP_CRON_FILE\"; "
+            "crontab \"$TMP_CRON_FILE\"; "
+            "rm -f \"$TMP_CRON_FILE\"; "
+            "echo \"Scheduled managed cron: $CRON_LINE\""
+        )
+        return self.execute_on_servers(cmd, servers, username, user_id, original_request)
     
     def _log_execution(self, username, user_id, original_request, command, servers, results):
         """Log command execution to database"""

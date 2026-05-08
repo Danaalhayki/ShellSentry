@@ -48,4 +48,6 @@ class Config:
     LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
     SCRIPT_ARCHIVE_DIR_NAME = os.environ.get('SCRIPT_ARCHIVE_DIR_NAME', 'ShellSentryScripts').strip() or 'ShellSentryScripts'
     SCRIPT_ARCHIVE_MAX_LIST = int(os.environ.get('SCRIPT_ARCHIVE_MAX_LIST', '50'))
+    SAFE_CRON_MODE = os.environ.get('SAFE_CRON_MODE', 'true').lower() == 'true'
+    SAFE_CRON_TAG_PREFIX = os.environ.get('SAFE_CRON_TAG_PREFIX', 'ShellSentryManaged').strip() or 'ShellSentryManaged'
 

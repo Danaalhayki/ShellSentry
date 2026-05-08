@@ -108,6 +108,64 @@ def _detect_archive_intent(text):
         return {'action': 'list', 'date_scope': scope}
     return {'action': None}
 
+
+def _extract_cron_expression(text):
+    """Extract a cron expression (5-field or @daily style) from request text."""
+    if not text:
+        return None
+    t = _normalize_intent_text(text)
+    macro = re.search(r'\b(@reboot|@yearly|@annually|@monthly|@weekly|@daily|@midnight|@hourly)\b', t, re.IGNORECASE)
+    if macro:
+        return macro.group(1).lower()
+    cron_5 = r'([A-Za-z0-9*/,\-]+)\s+([A-Za-z0-9*/,\-]+)\s+([A-Za-z0-9*/,\-]+)\s+([A-Za-z0-9*/,\-]+)\s+([A-Za-z0-9*/,\-]+)'
+
+    # Prefer patterns after explicit cue words.
+    for cue in (r'cron expression\s*', r'with\s*'):
+        m = re.search(cue + cron_5, t, re.IGNORECASE)
+        if m:
+            return " ".join(m.groups()).strip()
+
+    # Fallback: if multiple matches exist in a sentence, use the last one.
+    matches = re.findall(cron_5, t, re.IGNORECASE)
+    if not matches:
+        return None
+    return " ".join(matches[-1]).strip()
+
+
+def _is_safe_cron_expr(expr):
+    """Basic cron expression validation with strict character allowlist."""
+    if not expr:
+        return False
+    e = expr.strip()
+    if re.fullmatch(r'@(reboot|yearly|annually|monthly|weekly|daily|midnight|hourly)', e, re.IGNORECASE):
+        return True
+    parts = e.split()
+    if len(parts) != 5:
+        return False
+    token_re = re.compile(r'^[A-Za-z0-9*/,\-]+$')
+    return all(token_re.fullmatch(p) is not None for p in parts)
+
+
+def _detect_safe_cron_intent(text):
+    """Detect safe cron actions for managed archived scripts."""
+    normalized_text = _normalize_intent_text(text)
+    low = normalized_text.lower()
+    has_cron_word = any(k in low for k in ('cron', 'crontab', 'schedule', 'scheduled', 'جدولة', 'كرون'))
+    if not has_cron_word:
+        return {'action': None}
+
+    if any(k in low for k in ('delete cron', 'remove cron', 'clear crontab', 'wipe crontab', 'حذف كرون')):
+        return {'action': 'blocked_remove'}
+
+    if any(k in low for k in ('list cron', 'show cron', 'display cron', 'show crontab', 'اعرض الكرون')):
+        return {'action': 'list'}
+
+    script_name = _extract_script_name(normalized_text)
+    cron_expr = _extract_cron_expression(normalized_text)
+    if script_name and cron_expr:
+        return {'action': 'schedule', 'script_name': script_name, 'cron_expr': cron_expr}
+    return {'action': None}
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -222,6 +280,97 @@ def execute_command():
                     details='Enter host names in the Target Servers box or set REMOTE_SERVERS in your settings file.',
                 ),
             }), 400
+
+        # Safe Cron Mode: managed scheduling only for saved ShellSentry scripts.
+        cron_intent = _detect_safe_cron_intent(natural_language)
+        if cron_intent.get('action') == 'blocked_remove':
+            return jsonify({
+                'error': 'Cron removal is blocked in Safe Cron Mode',
+                'natural_language_summary': format_error_summary(
+                    'Removing or clearing crontab entries is blocked by policy.',
+                    details='You can only list or schedule managed ShellSentry script entries.',
+                ),
+            }), 400
+
+        if cron_intent.get('action') == 'list':
+            execution_results = ssh_executor.list_managed_cron_entries(
+                target_servers,
+                current_user.username,
+                current_user.id,
+                natural_language,
+            )
+            generated_command = f"List managed cron entries ({app.config['SAFE_CRON_TAG_PREFIX']}:*)"
+            formatted = format_execution_payload(
+                natural_language, generated_command, execution_results, host_context=None
+            )
+            return jsonify({
+                "success": True,
+                "original_request": natural_language,
+                "generated_command": generated_command,
+                "results": execution_results,
+                "natural_language_summary": formatted["natural_language_summary"],
+                "formatted_report": formatted["formatted_report"],
+            })
+
+        if cron_intent.get('action') == 'schedule':
+            if not app.config.get('SAFE_CRON_MODE', True):
+                return jsonify({
+                    'error': 'Safe Cron Mode is disabled',
+                    'natural_language_summary': format_error_summary(
+                        'Safe Cron Mode is currently disabled in configuration.',
+                    ),
+                }), 400
+
+            script_name = cron_intent.get('script_name')
+            cron_expr = cron_intent.get('cron_expr')
+            if not _is_safe_cron_expr(cron_expr):
+                return jsonify({
+                    'error': 'Invalid cron expression',
+                    'details': 'Use 5-field cron format like "0 2 * * *" or @daily',
+                    'natural_language_summary': format_error_summary(
+                        'Cron expression is invalid.',
+                        details='Use five fields (minute hour day month weekday) or @daily.',
+                    ),
+                }), 400
+
+            servers_with_script, servers_missing_script = ssh_executor.get_servers_having_script(
+                target_servers, script_name
+            )
+            if not servers_with_script:
+                return jsonify({
+                    'error': 'Saved script not found on selected servers',
+                    'natural_language_summary': format_error_summary(
+                        'Could not find that saved script to schedule.',
+                        details=f"Script must exist in $HOME/{app.config['SCRIPT_ARCHIVE_DIR_NAME']} on target servers.",
+                    ),
+                }), 400
+
+            execution_results = ssh_executor.schedule_saved_script_cron(
+                servers_with_script,
+                script_name,
+                cron_expr,
+                current_user.username,
+                current_user.id,
+                natural_language,
+            )
+            generated_command = (
+                f"Schedule managed cron: {cron_expr} "
+                f"bash $HOME/{app.config['SCRIPT_ARCHIVE_DIR_NAME']}/{script_name}"
+            )
+            formatted = format_execution_payload(
+                natural_language, generated_command, execution_results, host_context=None
+            )
+            payload = {
+                "success": True,
+                "original_request": natural_language,
+                "generated_command": generated_command,
+                "results": execution_results,
+                "natural_language_summary": formatted["natural_language_summary"],
+                "formatted_report": formatted["formatted_report"],
+            }
+            if servers_missing_script:
+                payload["missing_script_servers"] = servers_missing_script
+            return jsonify(payload)
 
         # Built-in script archive actions (list/re-run/explain saved scripts)
         archive_intent = _detect_archive_intent(natural_language)
