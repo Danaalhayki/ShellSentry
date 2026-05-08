@@ -17,7 +17,12 @@
     <div class="hero-section">
         <div class="hero-content">
             <div class="hero-badge">
-                <span class="badge-icon">🛡️</span>
+                <span class="badge-icon badge-icon-svg" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 3l8 3v5c0 4.5-3.2 8.5-8 10-4.8-1.5-8-5.5-8-10V6l8-3z"/>
+                        <path d="M9 12l2 2 4-4"/>
+                    </svg>
+                </span>
                 <span>Secure LLM-to-Bash Interface</span>
             </div>
             <h1 class="hero-title">
@@ -34,150 +39,324 @@
             </div>
             <div class="hero-stats">
                 <div class="stat-item">
-                    <div class="stat-number">🔒</div>
+                    <div class="stat-number stat-icon-svg" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 3l8 3v5c0 4.5-3.2 8.5-8 10-4.8-1.5-8-5.5-8-10V6l8-3z"/>
+                            <rect x="9" y="11" width="6" height="5" rx="1"/>
+                            <path d="M10.5 11V9.5a1.5 1.5 0 013 0V11"/>
+                        </svg>
+                    </div>
                     <div class="stat-label">Secure Execution</div>
                 </div>
                 <div class="stat-item">
-                    <div class="stat-number">⚡</div>
+                    <div class="stat-number stat-icon-svg" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/>
+                        </svg>
+                        <span class="stat-icon-pulse" aria-hidden="true"></span>
+                    </div>
                     <div class="stat-label">Real-time Results</div>
                 </div>
             </div>
         </div>
         <div class="hero-visual">
-            <script type="module" src="https://unpkg.com/@splinetool/viewer@1.12.57/build/spline-viewer.js"></script>
-            <spline-viewer 
-                url="https://prod.spline.design/8mKTF6lHVf5cxU0T/scene.splinecode"
-                loading="lazy"
-                style="width: 100%; height: 100%;"
-            ></spline-viewer>
+            <div class="hero-scene" role="img" aria-label="Illustration: ShellSentry shield with terminal prompt over a glowing secure platform">
+                <div class="hero-scene-ambient" aria-hidden="true"></div>
+                <div class="hero-scene-shards" aria-hidden="true">
+                    <span></span><span></span><span></span><span></span><span></span>
+                </div>
+
+                <div class="hero-scene-stage" aria-hidden="true">
+                    <div class="hero-shield-float">
+                        <svg class="hero-shield-outline" viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <defs>
+                                <linearGradient id="heroShieldGlass" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" stop-color="rgba(255,255,255,0.14)"/>
+                                    <stop offset="100%" stop-color="rgba(153,41,234,0.08)"/>
+                                </linearGradient>
+                                <linearGradient id="heroShieldFill" x1="0%" y1="0%" x2="0%" y2="100%">
+                                    <stop offset="0%" stop-color="#b855f0"/>
+                                    <stop offset="55%" stop-color="#9929EA"/>
+                                    <stop offset="100%" stop-color="#5c1a9e"/>
+                                </linearGradient>
+                                <filter id="heroShieldDrop" x="-20%" y="-20%" width="140%" height="140%">
+                                    <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#9929EA" flood-opacity="0.45"/>
+                                </filter>
+                            </defs>
+                            <!-- Outer glass shield -->
+                            <path fill="url(#heroShieldGlass)" stroke="rgba(255,255,255,0.22)" stroke-width="1.2"
+                                d="M100 12 L168 38 V108 C168 156 140 188 100 208 C60 188 32 156 32 108 V38 Z"/>
+                            <!-- Inner solid shield -->
+                            <path fill="url(#heroShieldFill)" filter="url(#heroShieldDrop)" stroke="rgba(250,235,146,0.35)" stroke-width="1"
+                                d="M100 28 L154 48 V106 C154 145 132 172 100 188 C68 172 46 145 46 106 V48 Z"/>
+                        </svg>
+                        <div class="hero-shield-terminal">
+                            <div class="hero-terminal-bar">
+                                <span class="hero-terminal-dot"></span>
+                                <span class="hero-terminal-dot"></span>
+                                <span class="hero-terminal-dot"></span>
+                                <span class="hero-terminal-title">bash — shellsentry</span>
+                            </div>
+                            <div class="hero-terminal-body">
+                                <p class="hero-terminal-line"><span class="hero-terminal-user">sentry</span><span class="hero-terminal-at">@</span><span class="hero-terminal-host">fleet</span><span class="hero-terminal-colon">:</span><span class="hero-terminal-path">~</span><span class="hero-terminal-dollar">$</span></p>
+                                <p class="hero-terminal-cmd">
+                                    <span class="hero-terminal-prompt">&gt;</span>
+                                    <span class="hero-terminal-typed" data-text=" show disk free"></span><span class="hero-terminal-caret" aria-hidden="true"></span>
+                                </p>
+                                <p class="hero-terminal-meta">validated · read-only</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
     <!-- Features Section -->
     <div class="features-section">
         <div class="feature-card">
-            <div class="feature-icon">🤖</div>
+            <div class="feature-icon feature-icon-svg" aria-hidden="true">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="5" y="6" width="14" height="13" rx="3"/>
+                    <path d="M9 6V3.5M15 6V3.5"/>
+                    <path d="M3.5 11h1.5M3.5 14h1.5M19 11h1.5M19 14h1.5"/>
+                    <circle cx="9.5" cy="12" r="1.2"/>
+                    <circle cx="14.5" cy="12" r="1.2"/>
+                    <path d="M9.5 16h5"/>
+                </svg>
+                <span class="feature-icon-pulse" aria-hidden="true"></span>
+            </div>
             <h3>AI-Powered</h3>
             <p>Natural language processing converts your requests into secure Bash commands</p>
         </div>
         <div class="feature-card">
-            <div class="feature-icon">🔒</div>
+            <div class="feature-icon feature-icon-svg" aria-hidden="true">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 3l8 3v5c0 4.5-3.2 8.5-8 10-4.8-1.5-8-5.5-8-10V6l8-3z"/>
+                    <rect x="9" y="11" width="6" height="5" rx="1"/>
+                    <path d="M10.5 11V9.5a1.5 1.5 0 013 0V11"/>
+                </svg>
+            </div>
             <h3>Secure Execution</h3>
             <p>Multi-layer security with input validation and command whitelisting</p>
         </div>
         <div class="feature-card">
-            <div class="feature-icon">🌐</div>
+            <div class="feature-icon feature-icon-svg" aria-hidden="true">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="4" y="4" width="16" height="5" rx="1.5"/>
+                    <rect x="4" y="15" width="16" height="5" rx="1.5"/>
+                    <circle cx="7.5" cy="6.5" r=".9" fill="currentColor" stroke="none"/>
+                    <circle cx="7.5" cy="17.5" r=".9" fill="currentColor" stroke="none"/>
+                    <path d="M16 6.5h2M16 17.5h2"/>
+                    <path d="M8 9v2M8 13v2M16 9v2M16 13v2"/>
+                </svg>
+            </div>
             <h3>Multi-Server</h3>
             <p>Execute commands across multiple remote servers simultaneously</p>
         </div>
         <div class="feature-card">
-            <div class="feature-icon">📊</div>
+            <div class="feature-icon feature-icon-svg" aria-hidden="true">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 19h18"/>
+                    <path d="M6 19v-5"/>
+                    <path d="M11 19v-9"/>
+                    <path d="M16 19v-6"/>
+                    <path d="M5 9l4-4 3 3 6-6"/>
+                    <path d="M14 2h4v4"/>
+                </svg>
+                <span class="feature-icon-live-dot" aria-hidden="true"></span>
+            </div>
             <h3>Real-time Results</h3>
             <p>Get instant feedback with detailed execution results and logs</p>
         </div>
     </div>
 
     <!-- How It Works Section -->
-    <div class="how-it-works-section">
-        <h2 class="section-title">How It Works</h2>
-        <div class="steps-container">
-            <div class="step-item">
-                <div class="step-number">1</div>
-                <h3>Describe Your Intent</h3>
-                <p>Type what you want to do in plain English</p>
-            </div>
-            <div class="step-arrow">→</div>
-            <div class="step-item">
-                <div class="step-number">2</div>
-                <h3>AI Generates Command</h3>
-                <p>Our LLM converts your request into secure Bash</p>
-            </div>
-            <div class="step-arrow">→</div>
-            <div class="step-item">
-                <div class="step-number">3</div>
-                <h3>Secure Execution</h3>
-                <p>Commands are validated and executed on remote servers</p>
-            </div>
-            <div class="step-arrow">→</div>
-            <div class="step-item">
-                <div class="step-number">4</div>
-                <h3>Get Results</h3>
-                <p>View real-time execution results and logs</p>
-            </div>
+    <section class="how-it-works-section how-it-works-v2" aria-label="How ShellSentry works">
+        <div class="how-heading">
+            <span class="how-kicker">workflow</span>
+            <h2 class="section-title how-title">From plain English to <span class="gradient-text">safe execution</span></h2>
+            <p class="how-subtitle">Four guarded steps from your sentence to per-server results.</p>
         </div>
-    </div>
+
+        <ol class="steps-track" role="list">
+            <li class="step-card">
+                <div class="step-card-inner">
+                    <span class="step-tag">Step 01</span>
+                    <div class="step-badge">
+                        <span class="step-badge-num">1</span>
+                        <svg class="step-badge-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M21 12a8 8 0 01-11.6 7.14L4 20l1-4.4A8 8 0 1121 12z"/>
+                            <path d="M8.5 12h7"/>
+                            <path d="M8.5 9.5h4"/>
+                        </svg>
+                        <span class="step-badge-ring" aria-hidden="true"></span>
+                    </div>
+                    <h3 class="step-title">Describe your intent</h3>
+                    <p class="step-text">Ask in plain English—no shell knowledge required.</p>
+                </div>
+            </li>
+
+            <li class="step-card">
+                <div class="step-card-inner">
+                    <span class="step-tag">Step 02</span>
+                    <div class="step-badge">
+                        <span class="step-badge-num">2</span>
+                        <svg class="step-badge-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M9 3a3 3 0 00-3 3v1a3 3 0 00-2 5.7V14a3 3 0 003 3v1a3 3 0 003 3"/>
+                            <path d="M15 3a3 3 0 013 3v1a3 3 0 012 5.7V14a3 3 0 01-3 3v1a3 3 0 01-3 3"/>
+                            <path d="M9 8h.01M15 8h.01"/>
+                            <path d="M9 12h6"/>
+                        </svg>
+                        <span class="step-badge-ring" aria-hidden="true"></span>
+                    </div>
+                    <h3 class="step-title">AI generates command</h3>
+                    <p class="step-text">The LLM grounds your intent in retrieved examples and emits a single Bash line.</p>
+                </div>
+            </li>
+
+            <li class="step-card">
+                <div class="step-card-inner">
+                    <span class="step-tag">Step 03</span>
+                    <div class="step-badge">
+                        <span class="step-badge-num">3</span>
+                        <svg class="step-badge-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M12 3l8 3v5c0 4.5-3.2 8.5-8 10-4.8-1.5-8-5.5-8-10V6l8-3z"/>
+                            <path d="M9 12l2 2 4-4"/>
+                        </svg>
+                        <span class="step-badge-ring" aria-hidden="true"></span>
+                    </div>
+                    <h3 class="step-title">Validated &amp; executed</h3>
+                    <p class="step-text">Policy checks run first—then SSH executes in parallel across your servers.</p>
+                </div>
+            </li>
+
+            <li class="step-card">
+                <div class="step-card-inner">
+                    <span class="step-tag">Step 04</span>
+                    <div class="step-badge step-badge--final">
+                        <span class="step-badge-num">4</span>
+                        <svg class="step-badge-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M3 19h18"/>
+                            <path d="M6 19v-5"/>
+                            <path d="M11 19v-9"/>
+                            <path d="M16 19v-6"/>
+                            <path d="M5 9l4-4 3 3 6-6"/>
+                            <path d="M14 2h4v4"/>
+                        </svg>
+                        <span class="step-badge-ring step-badge-ring--live" aria-hidden="true"></span>
+                    </div>
+                    <h3 class="step-title">Read the results</h3>
+                    <p class="step-text">Per-server output, plain-English summary, and a saved audit trail.</p>
+                </div>
+            </li>
+        </ol>
+    </section>
 
     <!-- CTA Section -->
-    <div class="cta-section">
-        <h2>Ready to Get Started?</h2>
-        <p>Join ShellSentry today and experience the power of AI-driven server management</p>
-        <div class="cta-buttons">
-            <a href="{{ url_for('register') }}" class="btn btn-primary btn-large">Create Account</a>
-            <a href="{{ url_for('login') }}" class="btn btn-secondary btn-large">Login</a>
+    <section class="cta-section cta-section-v2" aria-label="Get started with ShellSentry">
+        <div class="cta-bg" aria-hidden="true">
+            <span class="cta-orb cta-orb-1"></span>
+            <span class="cta-orb cta-orb-2"></span>
+            <div class="cta-grid"></div>
         </div>
-    </div>
+
+        <div class="cta-grid-layout">
+            <div class="cta-copy">
+                <span class="cta-kicker">
+                    <span class="cta-kicker-dot" aria-hidden="true"></span>
+                    Ready when you are
+                </span>
+                <h2 class="cta-title">
+                    Run your fleet
+                    <span class="gradient-text">with words, not commands.</span>
+                </h2>
+                <p class="cta-text">
+                    Create an account in under a minute. Describe what you need, ShellSentry validates and runs it
+                    across your servers, and gives you a clean per-server report.
+                </p>
+
+                <div class="cta-buttons cta-buttons-v2">
+                    <a href="{{ url_for('register') }}" class="btn btn-primary btn-large btn-cta-primary">
+                        <span>Create your account</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+                    </a>
+                    <a href="{{ url_for('login') }}" class="btn btn-secondary btn-large btn-cta-ghost">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
+                        <span>Sign in</span>
+                    </a>
+                </div>
+
+                <ul class="cta-trust" role="list">
+                    <li>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                        <span>Policy-validated commands</span>
+                    </li>
+                    <li>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        <span>Parallel SSH execution</span>
+                    </li>
+                    <li>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <span>Audit log on every run</span>
+                    </li>
+                </ul>
+            </div>
+
+            <aside class="cta-preview" aria-hidden="true">
+                <div class="cta-preview-window">
+                    <div class="cta-preview-bar">
+                        <span class="cta-preview-dot"></span>
+                        <span class="cta-preview-dot"></span>
+                        <span class="cta-preview-dot"></span>
+                        <span class="cta-preview-title">shellsentry · console</span>
+                    </div>
+                    <div class="cta-preview-body">
+                        <p class="cta-preview-line cta-preview-line--prompt">
+                            <span class="cta-preview-prompt">you</span>
+                            <span class="cta-preview-text">show free disk on web servers</span>
+                        </p>
+                        <p class="cta-preview-line cta-preview-line--cmd">
+                            <span class="cta-preview-prompt cta-preview-prompt--ai">$</span>
+                            <span class="cta-preview-cmd">df -h --output=source,size,avail,pcent /</span>
+                        </p>
+                        <div class="cta-preview-result">
+                            <span class="cta-preview-pill cta-preview-pill--ok">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg>
+                                3 servers · 0 errors
+                            </span>
+                            <span class="cta-preview-pill cta-preview-pill--neutral">read-only</span>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </section>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-// Error handling for Spline viewer WebGL issues
-window.addEventListener('error', function(e) {
-    if (e.message && (e.message.includes('WebGL') || e.message.includes('spline'))) {
-        console.warn('WebGL context issue detected. The 3D viewer may not render properly.');
-        setTimeout(function() {
-            const heroVisual = document.querySelector('.hero-visual');
-            if (heroVisual) {
-                const splineViewer = heroVisual.querySelector('spline-viewer');
-                if (splineViewer && !splineViewer.shadowRoot) {
-                    // Fallback if viewer fails to load
-                    heroVisual.innerHTML = '<div class="shield-fallback"><div class="shield-icon">🛡️</div><div class="shield-text">Secure ShellSentry</div></div>';
-                }
-            }
-        }, 2000);
-    }
-}, true);
-
-// Check if WebGL is available
-function checkWebGL() {
-    try {
-        const canvas = document.createElement('canvas');
-        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-        if (!gl) {
-            console.warn('WebGL is not supported. 3D viewer may not work.');
-            return false;
+(function() {
+    document.addEventListener('DOMContentLoaded', function() {
+        var el = document.querySelector('.hero-terminal-typed');
+        if (!el || !el.dataset.text) return;
+        if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            el.textContent = el.dataset.text;
+            return;
         }
-        return true;
-    } catch (e) {
-        console.warn('WebGL check failed:', e);
-        return false;
-    }
-}
-
-// Run check after page load
-document.addEventListener('DOMContentLoaded', function() {
-    if (!checkWebGL()) {
-        setTimeout(function() {
-            const heroVisual = document.querySelector('.hero-visual');
-            const splineViewer = heroVisual?.querySelector('spline-viewer');
-            if (splineViewer && (!splineViewer.shadowRoot || splineViewer.shadowRoot.children.length === 0)) {
-                heroVisual.innerHTML = '<div class="shield-fallback"><div class="shield-icon">🛡️</div><div class="shield-text">Secure ShellSentry</div></div>';
-            }
-        }, 3000);
-    }
-    
-    // Additional check after Spline viewer should have loaded
-    setTimeout(function() {
-        const heroVisual = document.querySelector('.hero-visual');
-        const splineViewer = heroVisual?.querySelector('spline-viewer');
-        if (splineViewer) {
-            const hasContent = splineViewer.shadowRoot && splineViewer.shadowRoot.children.length > 0;
-            if (!hasContent) {
-                heroVisual.innerHTML = '<div class="shield-fallback"><div class="shield-icon">🛡️</div><div class="shield-text">Secure ShellSentry</div></div>';
+        var full = el.dataset.text;
+        var i = 0;
+        function tick() {
+            if (i <= full.length) {
+                el.textContent = full.slice(0, i);
+                i++;
+                setTimeout(tick, i < 4 ? 120 : 55);
             }
         }
-    }, 5000);
-});
+        setTimeout(tick, 600);
+    });
+})();
 </script>
 {% endblock %}
 

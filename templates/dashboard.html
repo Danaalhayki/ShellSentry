@@ -3,92 +3,250 @@
 {% block title %}Dashboard - ShellSentry{% endblock %}
 
 {% block content %}
-<div class="dashboard">
-    <div class="dashboard-header">
-        <h2>Command Execution Dashboard</h2>
-        <p>Describe what you want to do in plain English, and ShellSentry will execute it securely on remote servers.</p>
-    </div>
+<div class="dashboard dashboard-shell">
+    <header class="dashboard-hero">
+        <div class="dashboard-hero-copy">
+            <span class="dashboard-kicker">
+                <span class="dashboard-kicker-dot" aria-hidden="true"></span>
+                Secure execution
+            </span>
+            <h1 class="dashboard-title">
+                Command
+                <span class="gradient-text">execution</span>
+                dashboard
+            </h1>
+            <p class="dashboard-lead">
+                Describe what you want in plain English. ShellSentry validates the request, generates a safe command,
+                and runs it across your target hosts—with per-server results.
+            </p>
+            <ul class="dashboard-pills" role="list">
+                <li>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                    Policy check
+                </li>
+                <li>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/></svg>
+                    Multi-host SSH
+                </li>
+                <li>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    Audit trail
+                </li>
+            </ul>
+        </div>
+    </header>
 
-    <div class="command-panel">
+    <div class="command-panel command-panel-v2">
+        <div class="command-panel-glow" aria-hidden="true"></div>
         <div class="command-input-section">
-            <h3>Enter Your Request</h3>
-            <form id="commandForm" class="command-form">
-                <div class="form-group">
-                    <label for="command">Natural Language Command</label>
-                    <textarea 
-                        id="command" 
-                        name="command" 
-                        rows="4" 
-                        placeholder="e.g., Show active connections on the server"
-                        required
-                    ></textarea>
+            <div class="command-panel-head">
+                <h2 class="command-panel-title">
+                    <span class="command-panel-icon" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h7"/><circle cx="18" cy="12" r="2"/><circle cx="15" cy="18" r="2"/></svg>
+                    </span>
+                    New request
+                </h2>
+                <p class="command-panel-hint">Natural language in · validated Bash out · results per server</p>
+            </div>
+
+            <form id="commandForm" class="command-form command-form-v2">
+                <div class="dash-field">
+                    <label class="dash-label" for="command">
+                        <span class="dash-label-icon" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                        </span>
+                        <span class="dash-label-text">What should the servers do?</span>
+                    </label>
+                    <div class="dash-input-shell dash-input-shell--textarea">
+                        <textarea
+                            id="command"
+                            name="command"
+                            rows="5"
+                            placeholder="Example: Show how much disk space is free on each host"
+                            required
+                            spellcheck="true"
+                        ></textarea>
+                    </div>
+                    <p class="dash-field-hint">Write a full sentence. ShellSentry maps it to a single inspected command.</p>
                 </div>
-                
-                <div class="form-group">
-                    <label for="servers">Target Servers (leave empty for all configured servers)</label>
-                    <input 
-                        type="text" 
-                        id="servers" 
-                        name="servers" 
-                        placeholder="server1.example.com, server2.example.com"
-                    >
-                    <small>Comma-separated list of server hostnames or IPs</small>
+
+                <div class="dash-field">
+                    <label class="dash-label" for="servers">
+                        <span class="dash-label-icon" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="5" rx="1.5"/><rect x="4" y="15" width="16" height="5" rx="1.5"/><circle cx="7.5" cy="6.5" r=".9" fill="currentColor" stroke="none"/><circle cx="7.5" cy="17.5" r=".9" fill="currentColor" stroke="none"/><path d="M16 6.5h2M16 17.5h2"/></svg>
+                        </span>
+                        <span class="dash-label-text">Target servers</span>
+                        <span class="dash-label-optional">optional</span>
+                    </label>
+                    <div class="dash-input-shell">
+                        <input
+                            type="text"
+                            id="servers"
+                            name="servers"
+                            placeholder="192.168.1.10, web-01.internal, db.example.com"
+                            autocomplete="off"
+                        >
+                    </div>
+                    <p class="dash-field-hint">Leave empty to use every host from your <code class="dash-code">REMOTE_SERVERS</code> config. Separate with commas.</p>
                 </div>
-                
-                <button type="submit" class="btn btn-primary btn-large" id="executeBtn">
-                    <span class="btn-text">Execute Command</span>
-                    <span class="btn-loader" style="display: none;">⏳ Processing...</span>
-                </button>
+
+                <div class="command-actions">
+                    <button type="submit" class="btn btn-execute" id="executeBtn">
+                        <span class="btn-text">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                            <span>Run on servers</span>
+                        </span>
+                        <span class="btn-loader" style="display: none;" aria-hidden="true">
+                            <span class="btn-spinner"></span>
+                            <span>Working…</span>
+                        </span>
+                    </button>
+                </div>
             </form>
         </div>
 
-        <div class="results-section" id="resultsSection" style="display: none;">
-            <h3>Execution Results</h3>
+        <div class="results-section results-section-v2" id="resultsSection" style="display: none;">
+            <div class="results-section-head">
+                <h2 class="results-section-title">Execution results</h2>
+                <p class="results-section-sub">Summary, AI explanation, and raw output from each host.</p>
+            </div>
             <div id="resultsContainer"></div>
         </div>
     </div>
 
-    <div class="examples-section">
-        <h3>Example Commands</h3>
-        <div class="examples-grid">
-            <div class="example-card" onclick="fillExample('Show active connections on the server')">
-                <strong>Network Connections</strong>
-                <p>Show active connections on the server</p>
+    <section class="examples-section examples-section-v2 examples-section-v3" aria-label="Example requests">
+        <div class="examples-head">
+            <div class="examples-head-text">
+                <h2 class="examples-title">Example requests</h2>
+                <p class="examples-sub">Tap any card to drop the text into the box—edit before you run.</p>
             </div>
-            <div class="example-card" onclick="fillExample('Check if 192.168.56.1 is alive')">
-                <strong>Ping Test</strong>
-                <p>Check if 192.168.56.1 is alive</p>
-            </div>
-            <div class="example-card" onclick="fillExample('Show disk storage usage on all machines')">
-                <strong>Disk Usage</strong>
-                <p>Show disk storage usage on all machines</p>
-            </div>
-            <div class="example-card" onclick="fillExample('Display network interfaces')">
-                <strong>Network Interfaces</strong>
-                <p>Display network interfaces</p>
-            </div>
-            <div class="example-card" onclick="fillExample('Show system uptime')">
-                <strong>System Uptime</strong>
-                <p>Show system uptime</p>
-            </div>
-            <div class="example-card" onclick="fillExample('List running processes')">
-                <strong>Running Processes</strong>
-                <p>List running processes</p>
-            </div>
-            <div class="example-card" onclick="fillExample('Show memory and swap usage')">
-                <strong>Memory Usage</strong>
-                <p>Show RAM and swap usage</p>
-            </div>
-            <div class="example-card" onclick="fillExample('Show listening TCP ports and which process owns them')">
-                <strong>Listening Ports</strong>
-                <p>Show open ports and services</p>
+            <div class="examples-filters" role="tablist" aria-label="Filter examples by category">
+                <button type="button" class="examples-filter is-active" data-filter="all" role="tab" aria-selected="true">All</button>
+                <button type="button" class="examples-filter" data-filter="network" role="tab" aria-selected="false">Network</button>
+                <button type="button" class="examples-filter" data-filter="storage" role="tab" aria-selected="false">Storage</button>
+                <button type="button" class="examples-filter" data-filter="system" role="tab" aria-selected="false">System</button>
+                <button type="button" class="examples-filter" data-filter="security" role="tab" aria-selected="false">Security</button>
             </div>
         </div>
-    </div>
+
+        <div class="examples-grid examples-grid-v2">
+            <button type="button" class="example-card example-card-v2" data-category="network" onclick="fillExample('Show active connections on the server')">
+                <span class="example-icon" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18"/></svg>
+                </span>
+                <span class="example-tag">Network</span>
+                <strong class="example-title">Active connections</strong>
+                <p class="example-text">See who is talking to this server right now.</p>
+                <code class="example-snippet">show active connections on the server</code>
+                <span class="example-cta" aria-hidden="true">
+                    Use this
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+                </span>
+            </button>
+
+            <button type="button" class="example-card example-card-v2" data-category="network" onclick="fillExample('Check if 192.168.56.1 is alive')">
+                <span class="example-icon" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                </span>
+                <span class="example-tag">Network</span>
+                <strong class="example-title">Ping test</strong>
+                <p class="example-text">Reachability check for any host on your fleet.</p>
+                <code class="example-snippet">check if 192.168.56.1 is alive</code>
+                <span class="example-cta" aria-hidden="true">
+                    Use this
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+                </span>
+            </button>
+
+            <button type="button" class="example-card example-card-v2" data-category="storage" onclick="fillExample('Show disk storage usage on all machines')">
+                <span class="example-icon" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
+                </span>
+                <span class="example-tag">Storage</span>
+                <strong class="example-title">Disk usage</strong>
+                <p class="example-text">Free space and partition size, host by host.</p>
+                <code class="example-snippet">show disk storage usage on all machines</code>
+                <span class="example-cta" aria-hidden="true">
+                    Use this
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+                </span>
+            </button>
+
+            <button type="button" class="example-card example-card-v2" data-category="network" onclick="fillExample('Display network interfaces')">
+                <span class="example-icon" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="18" height="11" rx="2"/><path d="M7 9V5a2 2 0 012-2h6a2 2 0 012 2v4"/><path d="M7 14h.01M11 14h.01M15 14h.01"/></svg>
+                </span>
+                <span class="example-tag">Network</span>
+                <strong class="example-title">Network interfaces</strong>
+                <p class="example-text">List adapters, IPs, MTUs, and link state.</p>
+                <code class="example-snippet">display network interfaces</code>
+                <span class="example-cta" aria-hidden="true">
+                    Use this
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+                </span>
+            </button>
+
+            <button type="button" class="example-card example-card-v2" data-category="system" onclick="fillExample('Show system uptime')">
+                <span class="example-icon" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                </span>
+                <span class="example-tag">System</span>
+                <strong class="example-title">System uptime</strong>
+                <p class="example-text">How long each host has been running.</p>
+                <code class="example-snippet">show system uptime</code>
+                <span class="example-cta" aria-hidden="true">
+                    Use this
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+                </span>
+            </button>
+
+            <button type="button" class="example-card example-card-v2" data-category="system" onclick="fillExample('List running processes')">
+                <span class="example-icon" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
+                </span>
+                <span class="example-tag">System</span>
+                <strong class="example-title">Running processes</strong>
+                <p class="example-text">A snapshot of what's currently executing.</p>
+                <code class="example-snippet">list running processes</code>
+                <span class="example-cta" aria-hidden="true">
+                    Use this
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+                </span>
+            </button>
+
+            <button type="button" class="example-card example-card-v2" data-category="system" onclick="fillExample('Show memory and swap usage')">
+                <span class="example-icon" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 6v12M11 6v12M15 6v12M19 6v12"/></svg>
+                </span>
+                <span class="example-tag">System</span>
+                <strong class="example-title">Memory usage</strong>
+                <p class="example-text">RAM, swap, and what's holding it.</p>
+                <code class="example-snippet">show memory and swap usage</code>
+                <span class="example-cta" aria-hidden="true">
+                    Use this
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+                </span>
+            </button>
+
+            <button type="button" class="example-card example-card-v2" data-category="security" onclick="fillExample('Show listening TCP ports and which process owns them')">
+                <span class="example-icon" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>
+                </span>
+                <span class="example-tag">Security</span>
+                <strong class="example-title">Listening ports</strong>
+                <p class="example-text">Open ports and the process owning each.</p>
+                <code class="example-snippet">show listening TCP ports and which process owns them</code>
+                <span class="example-cta" aria-hidden="true">
+                    Use this
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+                </span>
+            </button>
+        </div>
+        <p class="examples-empty" hidden>No examples in this category.</p>
+    </section>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 {% endblock %}
-

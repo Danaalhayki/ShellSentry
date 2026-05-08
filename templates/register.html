@@ -2,44 +2,149 @@
 
 {% block title %}Register - ShellSentry{% endblock %}
 
+{% block body_class %}page-auth{% endblock %}
+
+{% block extra_css %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+{% endblock %}
+
 {% block content %}
-<div class="auth-container">
-    <div class="auth-card">
-        <div class="auth-brand">
-            <img src="{{ url_for('static', filename='images/logo.webp') }}" alt="ShellSentry" class="auth-logo">
-            <h1 class="auth-title">ShellSentry</h1>
-            <p class="auth-subtitle">Join ShellSentry</p>
-        </div>
-        <h2 class="auth-form-title">Create Account</h2>
-        
-        <form method="POST" action="{{ url_for('register') }}" class="auth-form">
-            <div class="form-group">
-                <label for="username">Username</label>
-                <input type="text" id="username" name="username" placeholder="Choose a username" required autofocus>
+<div class="auth-page auth-page-register" aria-label="Create account">
+    <div class="auth-page-bg" aria-hidden="true">
+        <span class="auth-orb auth-orb-1"></span>
+        <span class="auth-orb auth-orb-2 auth-orb-shift"></span>
+        <span class="auth-orb auth-orb-3"></span>
+        <div class="auth-grid-noise"></div>
+    </div>
+
+    <div class="auth-split">
+        <aside class="auth-hero">
+            <div class="auth-hero-inner">
+                <span class="auth-hero-badge auth-hero-badge-alt">
+                    <span class="auth-hero-badge-dot" aria-hidden="true"></span>
+                    Join the workspace
+                </span>
+                <h1 class="auth-hero-title">
+                    Create your
+                    <span class="auth-hero-title-accent">ShellSentry</span>
+                    account
+                </h1>
+                <p class="auth-hero-lead">
+                    One sign-up unlocks the dashboard: describe what you need in plain language,
+                    review the generated command, and run it across your fleet with guardrails.
+                </p>
+                <ul class="auth-hero-features" role="list">
+                    <li>
+                        <span class="auth-feature-icon" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        </span>
+                        <span>Fast onboarding—username, email, and a strong password</span>
+                    </li>
+                    <li>
+                        <span class="auth-feature-icon" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        </span>
+                        <span>Execution logs and saved scripts when you need to re-run safely</span>
+                    </li>
+                    <li>
+                        <span class="auth-feature-icon" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+                        </span>
+                        <span>Password rules help keep automation credentials aligned with policy</span>
+                    </li>
+                </ul>
             </div>
-            
-            <div class="form-group">
-                <label for="email">Email</label>
-                <input type="email" id="email" name="email" placeholder="Enter your email" required>
+        </aside>
+
+        <div class="auth-form-column">
+            <div class="auth-card auth-card-glass auth-card-wide">
+                <div class="auth-card-brand">
+                    <img src="{{ url_for('static', filename='images/logo.webp') }}" alt="" class="auth-card-logo" width="56" height="56">
+                    <div>
+                        <p class="auth-card-kicker">ShellSentry</p>
+                        <h2 class="auth-card-heading">Create account</h2>
+                    </div>
+                </div>
+                <p class="auth-card-sub">Set up your profile—takes less than a minute.</p>
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        <div class="auth-flash-list" role="status">
+                            {% for category, message in messages %}
+                                <div class="auth-flash auth-flash-{{ category }}">{{ message }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+
+                <form method="POST" action="{{ url_for('register') }}" class="auth-form auth-form-enhanced auth-form-register" novalidate>
+                    <div class="form-group form-group-icon">
+                        <label for="username">Username</label>
+                        <div class="input-wrap">
+                            <span class="input-icon" aria-hidden="true">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                            </span>
+                            <input type="text" id="username" name="username" placeholder="Choose a username" required autofocus autocomplete="username">
+                        </div>
+                    </div>
+                    <div class="form-group form-group-icon">
+                        <label for="email">Email</label>
+                        <div class="input-wrap">
+                            <span class="input-icon" aria-hidden="true">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                            </span>
+                            <input type="email" id="email" name="email" placeholder="you@company.com" required autocomplete="email">
+                        </div>
+                    </div>
+                    <div class="form-group form-group-icon">
+                        <label for="password">Password</label>
+                        <div class="input-wrap">
+                            <span class="input-icon" aria-hidden="true">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+                            </span>
+                            <input type="password" id="password" name="password" placeholder="At least 8 characters" required minlength="8" autocomplete="new-password">
+                            <button type="button" class="input-reveal" data-toggle-password="password" aria-label="Show password" aria-pressed="false">
+                                <span class="icon-show" aria-hidden="true">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                </span>
+                                <span class="icon-hide" aria-hidden="true" hidden>
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/></svg>
+                                </span>
+                            </button>
+                        </div>
+                        <p class="password-hint password-hint-box">At least 8 characters, uppercase, lowercase, number. No: ; | &amp; $ ` \ &lt; &gt; ( ) { } [ ] ! or spaces</p>
+                    </div>
+                    <div class="form-group form-group-icon">
+                        <label for="password_confirm">Confirm password</label>
+                        <div class="input-wrap">
+                            <span class="input-icon" aria-hidden="true">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            </span>
+                            <input type="password" id="password_confirm" name="password_confirm" placeholder="Repeat your password" required minlength="8" autocomplete="new-password">
+                            <button type="button" class="input-reveal" data-toggle-password="password_confirm" aria-label="Show confirm password" aria-pressed="false">
+                                <span class="icon-show" aria-hidden="true">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                </span>
+                                <span class="icon-hide" aria-hidden="true" hidden>
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/></svg>
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block btn-auth-cta">
+                        <span>Create my account</span>
+                        <svg class="btn-auth-cta-arrow" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+                    </button>
+                </form>
+
+                <div class="auth-card-footer">
+                    <p>Already registered?</p>
+                    <a href="{{ url_for('login') }}" class="auth-text-link">Sign in instead <span aria-hidden="true">→</span></a>
+                </div>
             </div>
-            
-            <div class="form-group">
-                <label for="password">Password</label>
-                <input type="password" id="password" name="password" placeholder="Create a password" required minlength="8">
-                <small class="password-hint">At least 8 characters, uppercase, lowercase, number. No: ; | & $ ` \ &lt; &gt; ( ) { } [ ] ! or spaces</small>
-            </div>
-            
-            <div class="form-group">
-                <label for="password_confirm">Confirm Password</label>
-                <input type="password" id="password_confirm" name="password_confirm" placeholder="Re-enter your password" required minlength="8">
-            </div>
-            
-            <button type="submit" class="btn btn-primary btn-block">Register</button>
-        </form>
-        
-        <div class="auth-footer">
-            <p class="auth-footer-text">Already have an account?</p>
-            <a href="{{ url_for('login') }}" class="btn btn-auth-link">Login here</a>
+            <p class="auth-legal">By creating an account you agree to use ShellSentry responsibly on systems you own or are authorized to manage.</p>
         </div>
     </div>
 </div>
@@ -48,7 +153,25 @@
 {% block extra_js %}
 <script>
 (function() {
-    var form = document.querySelector('.auth-form');
+    document.querySelectorAll('[data-toggle-password]').forEach(function(btn) {
+        var id = btn.getAttribute('data-toggle-password');
+        var pwd = document.getElementById(id);
+        if (!pwd) return;
+        var show = btn.querySelector('.icon-show');
+        var hide = btn.querySelector('.icon-hide');
+        btn.addEventListener('click', function() {
+            var isText = pwd.type === 'text';
+            pwd.type = isText ? 'password' : 'text';
+            var reveal = isText ? 'Show password' : 'Hide password';
+            if (id === 'password_confirm') reveal = isText ? 'Show confirm password' : 'Hide confirm password';
+            btn.setAttribute('aria-label', reveal);
+            btn.setAttribute('aria-pressed', isText ? 'false' : 'true');
+            if (show) show.hidden = !isText;
+            if (hide) hide.hidden = isText;
+        });
+    });
+
+    var form = document.querySelector('.auth-form-register');
     var password = document.getElementById('password');
     var passwordConfirm = document.getElementById('password_confirm');
     if (form && password && passwordConfirm) {
@@ -72,4 +195,3 @@
 })();
 </script>
 {% endblock %}
-

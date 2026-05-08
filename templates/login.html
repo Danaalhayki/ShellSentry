@@ -2,33 +2,142 @@
 
 {% block title %}Login - ShellSentry{% endblock %}
 
+{% block body_class %}page-auth{% endblock %}
+
+{% block extra_css %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+{% endblock %}
+
 {% block content %}
-<div class="auth-container">
-    <div class="auth-card auth-card-login">
-        <div class="auth-brand">
-            <img src="{{ url_for('static', filename='images/logo.webp') }}" alt="ShellSentry" class="auth-logo">
-            <h1 class="auth-title">ShellSentry</h1>
-            <p class="auth-subtitle">Secure Natural Language Command Execution</p>
-        </div>
+<div class="auth-page" aria-label="Sign in">
+    <div class="auth-page-bg" aria-hidden="true">
+        <span class="auth-orb auth-orb-1"></span>
+        <span class="auth-orb auth-orb-2"></span>
+        <span class="auth-orb auth-orb-3"></span>
+        <div class="auth-grid-noise"></div>
+    </div>
 
-        <form method="POST" action="{{ url_for('login') }}" class="auth-form">
-            <h2 class="auth-form-title">Sign in to your account</h2>
-            <div class="form-group">
-                <label for="username">Username</label>
-                <input type="text" id="username" name="username" placeholder="Enter your username" required autofocus>
+    <div class="auth-split">
+        <aside class="auth-hero">
+            <div class="auth-hero-inner">
+                <span class="auth-hero-badge">
+                    <span class="auth-hero-badge-dot" aria-hidden="true"></span>
+                    Secure by design
+                </span>
+                <h1 class="auth-hero-title">
+                    Welcome back,
+                    <span class="auth-hero-title-accent">operator.</span>
+                </h1>
+                <p class="auth-hero-lead">
+                    Run natural-language requests across your servers with policy checks,
+                    SSH execution, and a clear audit trail—without leaving this console.
+                </p>
+                <ul class="auth-hero-features" role="list">
+                    <li>
+                        <span class="auth-feature-icon" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                        </span>
+                        <span>LLM-to-bash with validation before anything runs remotely</span>
+                    </li>
+                    <li>
+                        <span class="auth-feature-icon" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/></svg>
+                        </span>
+                        <span>Multi-host execution with per-server results you can trust</span>
+                    </li>
+                    <li>
+                        <span class="auth-feature-icon" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                        </span>
+                        <span>Session-based access—your credentials stay on your terms</span>
+                    </li>
+                </ul>
             </div>
-            <div class="form-group">
-                <label for="password">Password</label>
-                <input type="password" id="password" name="password" placeholder="Enter your password" required>
-            </div>
-            <button type="submit" class="btn btn-primary btn-block btn-auth-submit">Login</button>
-        </form>
+        </aside>
 
-        <div class="auth-footer">
-            <p class="auth-footer-text">Don't have an account?</p>
-            <a href="{{ url_for('register') }}" class="btn btn-auth-link">Create account</a>
+        <div class="auth-form-column">
+            <div class="auth-card auth-card-glass">
+                <div class="auth-card-brand">
+                    <img src="{{ url_for('static', filename='images/logo.webp') }}" alt="" class="auth-card-logo" width="56" height="56">
+                    <div>
+                        <p class="auth-card-kicker">ShellSentry</p>
+                        <h2 class="auth-card-heading">Sign in</h2>
+                    </div>
+                </div>
+                <p class="auth-card-sub">Use your account to open the command dashboard.</p>
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        <div class="auth-flash-list" role="status">
+                            {% for category, message in messages %}
+                                <div class="auth-flash auth-flash-{{ category }}">{{ message }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+
+                <form method="POST" action="{{ url_for('login') }}" class="auth-form auth-form-enhanced" novalidate>
+                    <div class="form-group form-group-icon">
+                        <label for="username">Username</label>
+                        <div class="input-wrap">
+                            <span class="input-icon" aria-hidden="true">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                            </span>
+                            <input type="text" id="username" name="username" placeholder="Your username" required autofocus autocomplete="username">
+                        </div>
+                    </div>
+                    <div class="form-group form-group-icon">
+                        <label for="password">Password</label>
+                        <div class="input-wrap">
+                            <span class="input-icon" aria-hidden="true">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                            </span>
+                            <input type="password" id="password" name="password" placeholder="Your password" required autocomplete="current-password">
+                            <button type="button" class="input-reveal" id="togglePassword" aria-label="Show password" aria-pressed="false">
+                                <span class="icon-show" aria-hidden="true">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                </span>
+                                <span class="icon-hide" aria-hidden="true" hidden>
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/></svg>
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block btn-auth-cta">
+                        <span>Continue to dashboard</span>
+                        <svg class="btn-auth-cta-arrow" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+                    </button>
+                </form>
+
+                <div class="auth-card-footer">
+                    <p>New here?</p>
+                    <a href="{{ url_for('register') }}" class="auth-text-link">Create an account <span aria-hidden="true">→</span></a>
+                </div>
+            </div>
+            <p class="auth-legal">ShellSentry — secure natural-language command execution.</p>
         </div>
     </div>
 </div>
 {% endblock %}
 
+{% block extra_js %}
+<script>
+(function() {
+    var pwd = document.getElementById('password');
+    var btn = document.getElementById('togglePassword');
+    if (!pwd || !btn) return;
+    var show = btn.querySelector('.icon-show');
+    var hide = btn.querySelector('.icon-hide');
+    btn.addEventListener('click', function() {
+        var isText = pwd.type === 'text';
+        pwd.type = isText ? 'password' : 'text';
+        btn.setAttribute('aria-label', isText ? 'Show password' : 'Hide password');
+        btn.setAttribute('aria-pressed', isText ? 'false' : 'true');
+        if (show) show.hidden = !isText;
+        if (hide) hide.hidden = isText;
+    });
+})();
+</script>
+{% endblock %}
