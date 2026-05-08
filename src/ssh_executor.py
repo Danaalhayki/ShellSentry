@@ -2,11 +2,21 @@ import paramiko
 import os
 import socket
 import re
+import concurrent.futures
 from .logger import setup_logger
 from .config import Config
 from .models import db, ExecutionLog
 
 logger = setup_logger()
+
+# Fast pre-flight reachability check timeout (seconds). Keeps UI responsive when
+# a server is offline by failing in ~5s instead of waiting for the OS-level TCP
+# connect timeout (~21s on Windows) inside paramiko.
+PORT_REACHABILITY_TIMEOUT = 5
+
+# Cap concurrent SSH workers so a large server list does not exhaust file handles
+# or hammer the local network stack.
+MAX_PARALLEL_SSH_WORKERS = 16
 
 class SSHExecutor:
     """Handles SSH-based remote command execution"""
@@ -25,43 +35,87 @@ class SSHExecutor:
         self.script_archive_dir_name = Config.SCRIPT_ARCHIVE_DIR_NAME
         self.script_archive_max_list = Config.SCRIPT_ARCHIVE_MAX_LIST
         self.safe_cron_tag_prefix = Config.SAFE_CRON_TAG_PREFIX
+
+    @staticmethod
+    def _is_port_reachable(server, port=22, timeout=PORT_REACHABILITY_TIMEOUT):
+        """
+        Quick TCP reachability check to short-circuit slow paramiko timeouts on
+        servers that are powered off, blocked by firewall, or otherwise not
+        listening on the SSH port. Returns True if a TCP connection can be
+        established within `timeout` seconds.
+        """
+        try:
+            with socket.create_connection((server, port), timeout=timeout):
+                return True
+        except (socket.timeout, OSError):
+            return False
+
+    def _run_in_parallel(self, servers, worker_fn):
+        """
+        Run `worker_fn(server)` for each server concurrently and return a dict
+        keyed by server in the original input order. A failure on one server
+        never blocks results from the others.
+        """
+        if not servers:
+            return {}
+
+        results = {}
+        max_workers = max(1, min(len(servers), MAX_PARALLEL_SSH_WORKERS))
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_server = {executor.submit(worker_fn, s): s for s in servers}
+            for future in concurrent.futures.as_completed(future_to_server):
+                server = future_to_server[future]
+                try:
+                    results[server] = future.result()
+                except Exception as e:
+                    logger.error(f"Worker failure for {server}: {str(e)}", exc_info=True)
+                    results[server] = {
+                        'success': False,
+                        'error': f'Internal worker error: {str(e)}',
+                        'stdout': '',
+                        'stderr': str(e),
+                        'exit_code': -1,
+                    }
+
+        return {s: results[s] for s in servers if s in results}
     
     def execute_on_servers(self, command, servers, username, user_id=None, original_request=''):
         """
-        Execute command on one or more remote servers
-        
+        Execute command on one or more remote servers in parallel.
+
+        Reachable servers return real output even when other servers in the same
+        batch time out or are offline. Each server's outcome is independent.
+
         Args:
             command: Bash command to execute
             servers: List of server hostnames/IPs
             username: Username of the user executing the command
             user_id: User ID for logging
             original_request: Original natural language request
-            
+
         Returns:
-            dict: Results from each server
+            dict: Results from each server, keyed by server (preserves input order).
         """
         if not servers:
             return {'error': 'No servers specified'}
-        
-        results = {}
-        
-        for server in servers:
+
+        def _worker(server):
             try:
-                result = self._execute_on_server(server, command)
-                results[server] = result
+                return self._execute_on_server(server, command)
             except Exception as e:
                 logger.error(f"Error executing on {server}: {str(e)}", exc_info=True)
-                results[server] = {
+                return {
                     'success': False,
                     'error': str(e),
                     'stdout': '',
                     'stderr': '',
-                    'exit_code': -1
+                    'exit_code': -1,
                 }
-        
-        # Log execution
+
+        results = self._run_in_parallel(servers, _worker)
+
         self._log_execution(username, user_id, original_request, command, servers, results)
-        
         return results
 
     def _exec_remote_text(self, ssh, command, timeout=25):
@@ -77,24 +131,24 @@ class SSHExecutor:
         Per host over one SSH session: OS (uname -a), running systemd services (summary),
         and listening TCP/UDP sockets (ss), similar in spirit to nmap "service" hints.
         Does not write ExecutionLog entries. Output is truncated on the remote via head.
+
+        Probes are run in parallel across servers so a single offline host does
+        not delay context collection for the others.
         """
         if not servers:
             return {}
-        results = {}
-        for server in servers:
+
+        def _worker(server):
             ssh, connect_error = self._open_ssh(server)
             if connect_error is not None:
-                results[server] = connect_error
-                continue
+                return connect_error
             try:
                 u_exit, u_out, u_err = self._exec_remote_text(ssh, 'uname -a', timeout=15)
-                # Running service units (systemd); empty if non-systemd or no permission
                 svc_cmd = (
                     "systemctl list-units --type=service --state=running --no-pager "
                     "2>/dev/null | head -n 50"
                 )
                 _s_exit, s_out, s_err = self._exec_remote_text(ssh, svc_cmd, timeout=25)
-                # Listening ports + processes when permitted (like nmap-style listeners)
                 _t_exit, t_out, t_err = self._exec_remote_text(
                     ssh, "ss -tlnp 2>/dev/null | head -n 40", timeout=20
                 )
@@ -103,7 +157,7 @@ class SSHExecutor:
                 )
 
                 uname_line = u_out or None
-                results[server] = {
+                return {
                     'success': u_exit == 0,
                     'uname_line': uname_line,
                     'uname_stderr': u_err or None,
@@ -119,7 +173,7 @@ class SSHExecutor:
                 }
             except Exception as e:
                 logger.warning(f"Host context probe failed on {server}: {str(e)}")
-                results[server] = {
+                return {
                     'success': False,
                     'uname_line': None,
                     'running_services': None,
@@ -129,8 +183,12 @@ class SSHExecutor:
                     'error': str(e),
                 }
             finally:
-                ssh.close()
-        return results
+                try:
+                    ssh.close()
+                except Exception:
+                    pass
+
+        return self._run_in_parallel(servers, _worker)
 
     def probe_os_uname(self, servers):
         """
@@ -143,7 +201,29 @@ class SSHExecutor:
         """
         Open an SSH connection to server using the same credential rules as execution.
         Returns (ssh_client, None) on success, or (None, error_dict) on failure.
+
+        A short TCP-level reachability probe runs first so that a powered-off or
+        firewalled server fails in ~5 seconds instead of waiting for the OS-level
+        TCP connect timeout (~21s on Windows) inside paramiko. This keeps batch
+        operations responsive when only some servers are reachable.
         """
+        if not self._is_port_reachable(server, port=22, timeout=PORT_REACHABILITY_TIMEOUT):
+            logger.warning(
+                f"Pre-flight check: SSH port 22 is not reachable on {server} "
+                f"(timeout {PORT_REACHABILITY_TIMEOUT}s) — skipping connection attempt"
+            )
+            return None, {
+                'success': False,
+                'uname_line': None,
+                'stderr': (
+                    f'Server {server} is unreachable on port 22 within '
+                    f'{PORT_REACHABILITY_TIMEOUT}s. The host may be offline, '
+                    f'a firewall may be blocking SSH, or the SSH service is not running.'
+                ),
+                'exit_code': -1,
+                'error': f'Connection timeout: {server} is unreachable',
+            }
+
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         try:
@@ -160,7 +240,9 @@ class SSHExecutor:
             connect_kwargs = {
                 'hostname': server,
                 'username': server_username,
-                'timeout': 30,
+                'timeout': 15,
+                'banner_timeout': 15,
+                'auth_timeout': 15,
                 'look_for_keys': False,
                 'allow_agent': False
             }
@@ -200,20 +282,11 @@ class SSHExecutor:
             else:
                 logger.warning(f"No SSH key or password found for {server}")
 
-            max_retries = 2
-            for attempt in range(max_retries):
-                try:
-                    ssh.connect(**connect_kwargs)
-                    return ssh, None
-                except (paramiko.SSHException, Exception) as e:
-                    if attempt < max_retries - 1:
-                        logger.warning(
-                            f"SSH connection attempt {attempt + 1}/{max_retries} failed for {server}: {str(e)}, retrying..."
-                        )
-                        import time
-                        time.sleep(1)
-                        continue
-                    raise
+            # Pre-flight TCP check above already proved the port is reachable,
+            # so a single connect attempt is sufficient. This avoids stacking
+            # paramiko timeouts on top of an already-confirmed reachable host.
+            ssh.connect(**connect_kwargs)
+            return ssh, None
         except paramiko.AuthenticationException:
             logger.error(f"Authentication failed for {server}")
             ssh.close()
@@ -443,35 +516,41 @@ class SSHExecutor:
         return self.execute_on_servers(run_cmd, servers, username, user_id, original_request)
 
     def get_servers_having_script(self, servers, script_name):
-        """Return two lists: servers_with_script, servers_missing_script."""
+        """Return two lists: servers_with_script, servers_missing_script.
+
+        Runs the existence check in parallel so unreachable servers do not
+        block the lookup on healthy hosts.
+        """
         if not servers:
             return [], []
         if not self._valid_script_filename(script_name):
             return [], list(servers)
 
-        have = []
-        missing = []
-        for server in servers:
+        archive_dir = f"$HOME/{self.script_archive_dir_name}"
+        check_cmd = (
+            f"ARCHIVE_DIR=\"{archive_dir}\"; "
+            f"SCRIPT_PATH=\"$ARCHIVE_DIR/{script_name}\"; "
+            "[ -f \"$SCRIPT_PATH\" ]"
+        )
+
+        def _worker(server):
             ssh, connect_error = self._open_ssh(server)
             if connect_error is not None:
-                missing.append(server)
-                continue
+                return False
             try:
-                archive_dir = f"$HOME/{self.script_archive_dir_name}"
-                check_cmd = (
-                    f"ARCHIVE_DIR=\"{archive_dir}\"; "
-                    f"SCRIPT_PATH=\"$ARCHIVE_DIR/{script_name}\"; "
-                    "[ -f \"$SCRIPT_PATH\" ]"
-                )
                 exit_code, _, _ = self._exec_remote_text(ssh, check_cmd, timeout=15)
-                if exit_code == 0:
-                    have.append(server)
-                else:
-                    missing.append(server)
+                return exit_code == 0
             except Exception:
-                missing.append(server)
+                return False
             finally:
-                ssh.close()
+                try:
+                    ssh.close()
+                except Exception:
+                    pass
+
+        check_results = self._run_in_parallel(servers, _worker)
+        have = [s for s in servers if check_results.get(s) is True]
+        missing = [s for s in servers if check_results.get(s) is not True]
         return have, missing
 
     def get_saved_script_content(self, server, script_name):

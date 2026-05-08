@@ -30,9 +30,12 @@ document.getElementById('commandForm').addEventListener('submit', async function
     const servers = serversInput ? serversInput.split(',').map(s => s.trim()).filter(s => s) : [];
     
     try {
-        // Add timeout to fetch request
+        // Add timeout to fetch request. Backend now runs SSH in parallel with a
+        // fast pre-flight reachability check, so unreachable servers no longer
+        // block reachable ones. The safety-net timeout is generous so large
+        // server batches with one slow command still finish.
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
+        const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minute timeout
         
         const response = await fetch('/api/execute', {
             method: 'POST',
