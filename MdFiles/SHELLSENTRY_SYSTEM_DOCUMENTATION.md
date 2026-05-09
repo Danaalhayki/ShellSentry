@@ -1,162 +1,292 @@
-# ShellSentry (LLM-to-Bash) — System Documentation
+# ShellSentry (LLM-to-Bash) — System Documentation (Updated)
 
-This document describes the **ShellSentry** codebase: features, techniques, technologies, code layout, and end-to-end request flow. It is written for **technical reporting** and deep onboarding.
-
----
-
-## 1. Project overview
-
-**ShellSentry** is a web application that:
-
-1. Authenticates users.
-2. Accepts a **natural language** task description and optional **target hostnames/IPs**.
-3. **Validates** the user’s text for unsafe patterns and prompt-injection style phrases.
-4. **Probes** remote Linux hosts over SSH to collect lightweight **host context** (OS, running services, listening ports).
-5. Optionally **retrieves** similar command examples via a **RAG (retrieval)** layer to ground the LLM.
-6. Calls an **OpenAI-compatible** LLM to produce a **Bash command or short script** (one command to run per target).
-7. **Validates** the generated command (whitelist, blacklist, optional **read-only** policy).
-8. **Executes** the command on one or more servers via **Paramiko (SSH)**, with logging to the database.
-9. Returns a **plain-language summary**, a **formatted technical report**, and an optional **LLM-generated explanation** of the run.
-
-The high-level product goal matches `projectDescription.md`: *natural language → validated Bash → secure remote execution*, with the implementation adding **RAG**, **host-aware prompting**, and **stricter read-only execution** than the static doc alone implies.
+This document reflects the current implemented behavior of the ShellSentry codebase, including script archiving, re-execution, script explanation, and managed Safe Cron scheduling.
 
 ---
 
-## 2. Features (as implemented in code)
+## 1. System Summary
 
-| Area | Feature |
-|------|--------|
-| **Auth** | Register, login, logout; passwords hashed (Werkzeug); password policy (length, mixed case, digit; blocks shell-dangerous characters). |
-| **Dashboard** | Authenticated page to submit NL requests and optional server list. |
-| **API** | `POST /api/execute` — main pipeline; `GET /api/servers` — configured server list; `GET /api/health` — health and config flags. |
-| **User input security** | Keyword blocklist, regex “dangerous” patterns, prompt-injection style patterns, length limit, control-character strip. |
-| **Host context** | Before LLM: per-host SSH session runs `uname -a`, `systemctl list-units` (sample), `ss -tlnp` / `ss -ulnp` (sample), truncated with `head`. |
-| **RAG** | Optional retrieval from a static knowledge base; **sentence-transformers** embedding + **FAISS** similarity search; top-k examples appended to the LLM user prompt. |
-| **LLM** | `generate_command`: system rules (no `ssh` fan-out, prefer grounding examples, use host context); retries on timeout, connection errors, HTTP 429. |
-| **Output cleanup** | Strips markdown fences, shell prompts, backticks from model output. |
-| **Command validation** | Whitelist of command bases; blacklist regexes; special handlers for `rm`, `kill*`, `passwd`, `su`, `sudo`; optional **read-only** mode with extra rules (no sudo, no file redirects except safe cases, no mutating `systemctl` / `journalctl` vacuum, etc.). |
-| **Execution** | SSH per host; multiline commands sent via **bash heredoc**; stdout/stderr/exit code; per-server and overall status. |
-| **Auditing** | `ExecutionLog` rows: user, original request, generated command, targets, JSON results, timestamp; file + console logging. |
-| **UX** | `result_formatter` builds non-technical summary + monospace report; second LLM call can **summarize** the report in plain language. |
-| **Errors** | Branded Jinja2 error pages for 400/403/404/405/500; API returns `natural_language_summary` for failures. |
+ShellSentry is an authenticated Flask application that converts natural language into validated Bash commands and executes them on remote Linux hosts over SSH.
+
+Main security architecture:
+
+1. User authentication.
+2. Input-level safety validation.
+3. Intent routing for safe built-in actions (archive/cron modes).
+4. Host-aware LLM command generation with optional RAG grounding.
+5. Command policy validation (whitelist + blacklist + read-only guardrails).
+6. Parallel SSH execution with audit logging.
+7. User-friendly and technical result reporting.
 
 ---
 
-## 3. Techniques and design patterns
+## 2. Repository Structure
 
-- **Defense in depth**: user-text checks → LLM (constrained by prompt) → **command** whitelist/blacklist → optional read-only policy → SSH.
-- **Grounding (RAG)**: retrieve similar *trusted* (hand-authored) `description → command` pairs to reduce wild hallucinations; cached queries (LRU) to limit embedding work.
-- **Context-aware generation**: host snapshot text steers tool/path choices (e.g., services visible on the host).
-- **Idempotent / single-shot remote command**: LLM is instructed to output **one** command for the app to run on each target, not a loop over hosts (the app handles multi-host).
-- **Safe multiline execution**: `bash -s << 'SHELLSENTRY_EOF'` avoids quoting bugs on scripts.
-- **Read-only default**: `READ_ONLY_EXECUTION` (default `true`) blocks state-changing patterns even if whitelisted in the broad list.
-- **API UX**: structured JSON for UI; human-readable `natural_language_summary` and `format_error_summary` for errors.
-- **Resilience**: LLM HTTP retries, SSH connect retries, graceful RAG failure (empty retrieval if index fails to build).
-
----
-
-## 4. Technologies and dependencies
-
-| Layer | Technology |
-|-------|------------|
-| **Runtime** | Python 3.8+ (typical) |
-| **Web framework** | Flask 3, Jinja2 templates |
-| **Session / auth** | Flask-Login |
-| **Persistence** | Flask-SQLAlchemy; default SQLite via `DATABASE_URL` |
-| **Passwords** | Werkzeug `generate_password_hash` / `check_password_hash` |
-| **Config** | `python-dotenv` → `src.config.Config` |
-| **LLM** | HTTPS `requests` to OpenAI-compatible `.../chat/completions` (OpenAI, Groq, Ollama-compatible, etc.) |
-| **SSH** | Paramiko (RSA/Ed25519 keys, password, optional `SSH_AGENT_SOCKET`, per-server `SERVER_CREDENTIALS`) |
-| **RAG** | `sentence-transformers` (e.g. `all-MiniLM-L6-v2`), `faiss-cpu` |
-| **Frontend** | Server-rendered HTML + vanilla JS (`static/js/dashboard.js`), CSS under `static/css/` |
-
-**Note:** `requirements.txt` lists `openai` but the main client path uses `requests` for chat completions. RAG is **optional at runtime** if dependencies fail: retrieval returns empty and the app continues.
-
----
-
-## 5. Repository and code structure
-
-```
+```text
 ShellSentry/
-├── run.py                 # Dev entry: `python run.py` (port 5001)
-├── test_llm.py            # LLM connectivity helper (if present)
+├── run.py
 ├── requirements.txt
-├── env.example            # Environment variable template
+├── env.example
 ├── src/
-│   ├── app.py             # Flask routes, pipeline orchestration, error handlers
-│   ├── config.py          # Config from environment
-│   ├── models.py          # User, ExecutionLog
-│   ├── auth.py            # register_user, authenticate_user, password policy
-│   ├── security.py        # SecurityLayer: user input validation
-│   ├── llm_client.py      # LLMClient: generate_command, summarize_execution_report
-│   ├── rag_pipeline.py   # RagPipeline: embeddings, FAISS, retrieve, format_for_prompt
-│   ├── command_validator.py  # Whitelist/blacklist, read-only rules, normalize_for_execution
-│   ├── ssh_executor.py    # Paramiko: probe_host_context, execute_on_servers, logging
-│   ├── result_formatter.py # Plain-language + formatted report, error summaries
-│   ├── logger.py          # File + console logging
+│   ├── app.py
+│   ├── config.py
+│   ├── models.py
+│   ├── auth.py
+│   ├── security.py
+│   ├── llm_client.py
+│   ├── rag_pipeline.py
+│   ├── command_validator.py
+│   ├── ssh_executor.py
+│   ├── result_formatter.py
+│   ├── logger.py
 │   └── __init__.py
-├── templates/             # Jinja2: index, login, register, dashboard, errors/error.html
+├── templates/
 ├── static/
-│   ├── css/
-│   └── js/dashboard.js    # fetch /api/execute, render results
+│   └── js/dashboard.js
 └── MdFiles/
     ├── projectDescription.md
-    └── SHELLSENTRY_SYSTEM_DOCUMENTATION.md   # (this file)
+    └── SHELLSENTRY_SYSTEM_DOCUMENTATION.md
 ```
 
 ---
 
-## 6. End-to-end code flow (main execution path)
+## 3. Major Modules and Responsibilities
 
-The central path is `POST /api/execute` in `src/app.py` → `execute_command()`.
+### `src/app.py`
+- Flask routes and overall orchestration.
+- Main endpoint: `POST /api/execute`.
+- Intent detectors:
+  - `_detect_archive_intent()` for list/re-run/explain saved scripts.
+  - `_detect_safe_cron_intent()` for managed cron operations.
+  - `_extract_cron_expression()` and `_is_safe_cron_expr()` for cron parsing/validation.
 
-1. **Auth**: `@login_required` ensures a logged-in user.
-2. **Parse JSON**: `command` (NL text), `servers` (optional list). If `servers` is empty, use `app.config['REMOTE_SERVERS']`.
-3. **Empty / config checks**: Reject empty command; reject if no targets after defaulting.
-4. **SecurityLayer.validate_input(natural_language)**: blocklists, patterns, length; may return 400.
-5. **SSHExecutor.probe_host_context(target_servers)**: one SSH session per host; collect OS, services, `ss` samples (or error dict per host).
-6. **RagPipeline.retrieve(natural_language, top_k=3)** → **format_for_prompt** for LLM text block.
-7. **LLMClient.generate_command(..., remote_host_context=host_context, rag_context_text=...)**:
-   - Builds system + user messages; calls OpenAI-compatible API; cleans markdown/prompts from output.
-8. **On LLM failure**: 500 with error details and friendly summary.
-9. **CommandValidator.validate(generated_command)**: whitelist/blacklist/restricted/read-only; on failure 400, may include `generated_command` for debugging.
-10. **CommandValidator.normalize_for_execution**: strip shebangs/quotes/backticks for actual shell.
-11. **SSHExecutor.execute_on_servers(command, servers, user, user_id, original_request)**:
-    - Per host: connect, `exec_command`, collect stdout/stderr/exit; **ExecutionLog** inserted.
-12. **format_execution_payload**: natural language summary + monospace report.
-13. **LLMClient.summarize_execution_report** (optional second call): plain-language “AI report explanation” for non-experts.
-14. **JSON response**: `success`, `original_request`, `remote_host_context`, `generated_command`, `rag_retrieval`, `results`, `natural_language_summary`, `formatted_report`, `ai_report_explanation` (or error key).
+### `src/security.py`
+- `SecurityLayer.validate_input()` checks user text for unsafe patterns.
 
-**Supporting routes**
+### `src/llm_client.py`
+- `generate_command()` for NL->Bash generation.
+- `summarize_execution_report()` for plain-language report explanation.
+- `explain_script()` for plain-language explanation of saved script content.
+- Host-context formatting and HTTP retry/rate-limit handling.
 
-- `GET /` — landing or redirect to dashboard if logged in.  
-- `GET/POST /login`, `/register`, `GET /logout`  
-- `GET /dashboard` — main UI  
-- `GET /api/servers` — list from config  
-- `GET /api/health` — `llm_configured`, `ssh_configured`, `servers_configured`  
+### `src/command_validator.py`
+- Command policy engine:
+  - whitelist/blacklist checks,
+  - restricted command handling,
+  - read-only enforcement,
+  - execution normalization.
 
----
+### `src/ssh_executor.py`
+- Parallel SSH execution and host probing.
+- Handles script archive lifecycle and Safe Cron operations:
+  - `list_saved_scripts()`
+  - `execute_saved_script()`
+  - `get_servers_having_script()`
+  - `get_saved_script_content()`
+  - `find_saved_script_content_across_servers()`
+  - `list_managed_cron_entries()`
+  - `schedule_saved_script_cron()`
 
-## 7. Configuration (environment)
+### `src/result_formatter.py`
+- Creates user-facing summary and formatted technical report.
 
-Key variables (see `env.example` and `src/config.py`):
-
-- **Flask / DB**: `SECRET_KEY`, `DATABASE_URL`  
-- **LLM**: `LLM_API_KEY`, `LLM_API_BASE_URL`, `LLM_MODEL`, `LLM_API_TYPE`  
-- **SSH**: `SSH_USER`, `SSH_PASSWORD`, `SSH_KEY_PATH`, `SSH_AGENT_SOCKET`, `SERVER_CREDENTIALS` (per-host `IP:user:pass` list)  
-- **Targets**: `REMOTE_SERVERS` (comma-separated)  
-- **Security**: `ALLOW_ROOT_EXECUTION`, `READ_ONLY_EXECUTION`, `LOG_LEVEL`  
-
----
-
-## 8. Security and limitations (honest scope)
-
-- **Not a full production hardening guide**: use HTTPS, secrets management, network firewalls, and least-privilege SSH users in real deployments.  
-- **LLM risk**: validation reduces but cannot eliminate all creative bypass attempts; read-only mode is a strong default.  
-- **Whitelist breadth**: the whitelist is large; organizational policy may want to **narrow** it for stricter sites.  
-- **RAG knowledge base** includes example strings with `sudo` in static entries; **read-only validation** and prompts still constrain what actually runs.  
-- **Default admin**: `run.py` prints default credentials; ensure deployment creates users and rotates passwords (auto-creation in `create_tables()` is not fully implemented in the snippet—rely on registration or manual DB user creation as your deployment does).
+### `src/models.py`
+- DB models including `ExecutionLog` for auditing.
 
 ---
 
-*Align any assignment or deployment wording with your actual setup and `projectDescription.md` where they differ.*
+## 4. API Endpoints
+
+### `POST /api/execute` (authenticated)
+Primary orchestration endpoint. Accepts:
+- `command`: natural language request (required)
+- `servers`: optional array of server hostnames/IPs
+
+Returns:
+- `success`
+- `original_request`
+- `generated_command`
+- `results` (per-server output)
+- `natural_language_summary`
+- `formatted_report`
+- optional: `remote_host_context`, `rag_retrieval`, `ai_report_explanation`, `script_explanation`, `missing_script_servers`
+
+### `GET /api/servers` (authenticated)
+Returns configured default server list.
+
+### `GET /api/health` (public)
+Returns health and basic config flags (`llm_configured`, `ssh_configured`, `servers_configured`).
+
+---
+
+## 5. End-to-End Execution Flow (`/api/execute`)
+
+1. Validate authenticated session (`@login_required`).
+2. Parse and validate payload (`command`, optional `servers`).
+3. Apply `SecurityLayer.validate_input()`.
+4. If no servers supplied, fallback to `REMOTE_SERVERS`.
+5. Check Safe Cron intent (`_detect_safe_cron_intent`):
+   - `list` -> `ssh_executor.list_managed_cron_entries()`
+   - `schedule` -> `ssh_executor.schedule_saved_script_cron()`
+   - destructive removal intent -> blocked
+6. Check Script Archive intent (`_detect_archive_intent`):
+   - `list` -> `ssh_executor.list_saved_scripts()`
+   - `rerun` -> existence check + content validation + `execute_saved_script()`
+   - `explain` -> fetch content + `llm_client.explain_script()`
+7. Standard NL->Bash flow:
+   - Probe host context: `ssh_executor.probe_host_context()`
+   - Retrieve RAG examples: `rag_pipeline.retrieve()`
+   - Generate command: `llm_client.generate_command()`
+   - Validate: `command_validator.validate()`
+   - Normalize: `command_validator.normalize_for_execution()`
+   - Execute: `ssh_executor.execute_on_servers()`
+8. Format response via `format_execution_payload()`.
+9. Optional AI explanation of report via `summarize_execution_report()`.
+
+---
+
+## 6. Script Archive: Implemented Lifecycle
+
+### Auto-save behavior
+When execution command is multi-line, `ssh_executor._execute_on_server()` wraps and saves it on the remote host before running.
+
+Default location:
+- `$HOME/ShellSentryScripts` (from `SCRIPT_ARCHIVE_DIR_NAME`)
+
+Filename pattern:
+- `ShellSentry_<timestamp>.sh`
+
+### Listing
+- Natural language list requests trigger `list_saved_scripts()`.
+- Supports date scopes: `all`, `today`, `yesterday`.
+- Results are sorted and capped by `SCRIPT_ARCHIVE_MAX_LIST`.
+
+### Re-execution
+- Natural language rerun requests include a `*.sh` filename.
+- Server-level existence is checked in parallel.
+- Before running, script content is loaded and passed through `command_validator.validate()` using current policy.
+- If valid, it runs with `bash "$HOME/<archive>/<script_name>"`.
+
+### Script explanation
+- Natural language explain requests load script content from selected servers.
+- `llm_client.explain_script()` returns plain-language behavior and risk explanation.
+
+---
+
+## 7. Safe Cron Mode (Managed Cron)
+
+Safe cron is focused on managed archived scripts only.
+
+### Supported actions
+- List managed entries:
+  - `list_managed_cron_entries()`
+  - Filters by configured tag prefix (`SAFE_CRON_TAG_PREFIX`)
+- Schedule/update entry for one saved script:
+  - `schedule_saved_script_cron()`
+  - Replaces existing managed line for the same script, then appends new line.
+
+### Blocked actions
+- User requests to clear/remove/wipe cron are explicitly blocked at intent layer.
+
+### Safety checks
+- Cron expression must match:
+  - valid macro (`@daily`, etc.) or
+  - strict 5-field expression.
+- Script name must be a safe `.sh` basename.
+- Script must exist on target server(s).
+
+---
+
+## 8. Host Probe and Context-Aware Generation
+
+Before normal LLM generation, ShellSentry probes each host (parallel SSH):
+- `uname -a`
+- running systemd services (sample)
+- listening TCP/UDP sockets (`ss`, sample)
+- target server identity/context is preserved per host so generated commands are adapted to each machine's environment.
+
+`llm_client.generate_command()` incorporates this host snapshot and optional RAG context in the final prompt, improving command relevance per environment.
+
+---
+
+## 9. Reliability and Parallelism
+
+Implemented resilience techniques in SSH and LLM paths:
+
+- Fast SSH port reachability pre-check (port 22).
+- Parallel per-server operations with bounded worker pool.
+- Independent per-host outcomes (one failed host does not block others).
+- LLM retry logic for timeout, connection issues, and HTTP 429 with backoff.
+- Frontend request timeout and improved user-facing troubleshooting messages.
+
+---
+
+## 10. Security Controls in Practice
+
+Defense-in-depth currently includes:
+
+1. Authenticated endpoints and user sessions.
+2. Input text validation (`SecurityLayer`).
+3. Prompt constraints and output cleanup.
+4. Command validation + optional read-only mode (`READ_ONLY_EXECUTION=true` default).
+5. Script name/path constraints for archive/cron flows.
+6. Re-validation before saved script re-execution.
+7. Managed-only cron filtering and update logic.
+8. Persistent audit logs (`ExecutionLog`) plus logger output.
+
+---
+
+## 11. Configuration Reference (`src/config.py`)
+
+Core variables:
+
+- App/DB:
+  - `SECRET_KEY`
+  - `DATABASE_URL`
+- LLM:
+  - `LLM_API_TYPE`
+  - `LLM_API_KEY`
+  - `LLM_API_BASE_URL`
+  - `LLM_MODEL`
+- SSH:
+  - `SSH_USER`
+  - `SSH_PASSWORD`
+  - `SSH_KEY_PATH`
+  - `SSH_AGENT_SOCKET`
+  - `SERVER_CREDENTIALS`
+- Targets:
+  - `REMOTE_SERVERS`
+- Security:
+  - `ALLOW_ROOT_EXECUTION`
+  - `READ_ONLY_EXECUTION`
+  - `LOG_LEVEL`
+- Script archive + cron:
+  - `SCRIPT_ARCHIVE_DIR_NAME`
+  - `SCRIPT_ARCHIVE_MAX_LIST`
+  - `SAFE_CRON_MODE`
+  - `SAFE_CRON_TAG_PREFIX`
+
+---
+
+## 12. Frontend Behavior (`static/js/dashboard.js`)
+
+UI renders:
+- Simple-language summary (`natural_language_summary`)
+- Optional AI explanation of report (`ai_report_explanation`)
+- Optional AI explanation of saved script (`script_explanation`)
+- Expandable raw technical report (`formatted_report`)
+
+It also surfaces API errors with actionable troubleshooting context.
+
+---
+
+## 13. Limitations and Deployment Notes
+
+- Designed for educational/controlled environments, not unrestricted production.
+- LLM-generated content remains probabilistic; policy checks mitigate but do not eliminate all risk.
+- Broader production readiness would require stronger operational controls (RBAC, hardened secret management, TLS termination, SIEM pipelines, stricter command policy profiles, and security testing).
+- Test setup includes an added Kali Linux target server to verify the platform works in multi-server scenarios across different Linux OS environments.
+
+---
+
+This documentation now aligns with the current implemented ShellSentry code paths and features.

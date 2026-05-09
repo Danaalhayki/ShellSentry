@@ -1,0 +1,33 @@
+{
+  "unicode_dash_chars": ["\u2010", "\u2011", "\u2012", "\u2013", "\u2014", "\u2212"],
+  "archive": {
+    "script_words": ["script", "scripts"],
+    "archive_hints": ["shellsentryscripts", "saved script", "saved scripts"],
+    "list_words": ["list", "show", "display", "ls"],
+    "run_phrases": [
+      "rerun", "re-run", "re run",
+      "reexecute", "re-execute", "re execute",
+      "run again", "execute saved"
+    ],
+    "explain_phrases": ["explain", "what does"],
+    "scope_yesterday_words": ["yesterday"],
+    "scope_today_words": ["today"]
+  },
+  "cron": {
+    "cron_words": ["cron", "crontab", "schedule", "scheduled"],
+    "blocked_remove_phrases": [
+      "delete cron", "remove cron", "clear crontab", "wipe crontab"
+    ],
+    "list_phrases": [
+      "list cron", "show cron", "display cron", "show crontab"
+    ]
+  },
+  "patterns": {
+    "script_filename_regex": "\\b([A-Za-z0-9._-]+\\.sh)\\b",
+    "cron_macro_regex": "\\b(@reboot|@yearly|@annually|@monthly|@weekly|@daily|@midnight|@hourly)\\b",
+    "cron_five_field_regex": "([A-Za-z0-9*/,\\-]+)\\s+([A-Za-z0-9*/,\\-]+)\\s+([A-Za-z0-9*/,\\-]+)\\s+([A-Za-z0-9*/,\\-]+)\\s+([A-Za-z0-9*/,\\-]+)",
+    "cron_expression_cues": ["cron expression\\s*", "with\\s*"],
+    "cron_macro_allowlist_regex": "@(reboot|yearly|annually|monthly|weekly|daily|midnight|hourly)",
+    "cron_token_regex": "^[A-Za-z0-9*/,\\-]+$"
+  }
+}

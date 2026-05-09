@@ -1,330 +1,189 @@
-LLM-to-Bash: A Secure Natural Language Interface for Remote Command Execution
-Project Description
-LLM-to-Bash is a web-based system designed to translate natural language requests into Linux Bash commands or scripts and execute them securely on remote machines. The project aims to simplify remote system administration tasks while maintaining strict security controls, making it suitable for cybersecurity-focused environments.
-The system allows authenticated users to describe the task they want to execute on one or more remote servers using plain English. A Large Language Model (LLM), accessed via an OpenAI-compatible API (e.g. OpenAI, Groq, Ollama), interprets the user’s request and generates the appropriate Bash command or script. The generated command is then validated and executed remotely using SSH (Paramiko) with key-based or password authentication, and the execution results are returned to the user through the web interface.
+# ShellSentry (LLM-to-Bash)
+## Updated Project Description
 
-Motivation
-System administrators and cybersecurity professionals often need to perform repetitive or complex Bash commands across multiple machines. These tasks require strong command-line knowledge and increase the risk of human error. By leveraging LLMs, this project introduces an intelligent and user-friendly interface that reduces complexity while preserving security and control over remote execution.
+ShellSentry is a secure web application that translates natural language requests into Bash commands and executes them on remote Linux servers through SSH. It is designed for cybersecurity-focused educational use, where usability and safety must be balanced.
 
-System Architecture and Workflow
-The system operates through the following stages:
-1. User Authentication
-Users must log in to the system before issuing any requests. Authentication ensures accountability and prevents unauthorized access to remote execution functionality.
-2. Natural Language Input
-The user submits a request describing the desired action, such as:
-“Show active connections on the server”
+The system combines authentication, input sanitization, host-aware LLM generation, command policy validation, and audited remote execution. It now also includes a managed script archive workflow, script re-execution, script explanation, and safe managed cron scheduling for saved scripts.
 
+---
 
-“Check if 192.168.56.1 is alive”
+## 1) Motivation and Problem
 
+System administrators and cybersecurity teams often run repetitive Linux commands across multiple servers. This creates two major problems:
 
-“Show disk storage usage on all machines”
+1. Usability risk: users need strong CLI expertise to execute tasks quickly and correctly.
+2. Security risk: mistakes, unsafe commands, or abuse can impact critical infrastructure.
 
+LLMs reduce the usability barrier, but directly running LLM output introduces new threats such as prompt abuse, dangerous command generation, privilege misuse, and inconsistent multi-host behavior.
 
-“Perform a database backup for all servers”
+ShellSentry addresses this gap with defense-in-depth controls around natural-language-driven automation.
 
+---
 
-3. Input Validation
-The system first analyzes the user’s request to detect malicious intent, prohibited keywords, or unsafe operations. This step protects against prompt-based attacks and abuse of the LLM.
-4. LLM Processing
-The validated request is sent to the LLM through an OpenAI-compatible API. The LLM converts the natural language input into:
-A single Bash command for simple requests, or
+## 2) Core Objectives
 
+- Convert plain-English requests into executable Bash commands.
+- Enforce safety before and after LLM generation.
+- Execute on one or many remote hosts with SSH.
+- Return clear outputs for technical and non-technical users.
+- Keep auditable logs for accountability.
+- Support safer operational reuse with archived script execution and controlled scheduling.
 
-A multi-step Bash script for complex or multi-host operations.
+---
 
+## 3) End-to-End Workflow (As Implemented)
 
-5. Command Validation
-The generated command or script undergoes further validation using:
-Whitelist rules for allowed commands
+1. **Authentication**
+   - User logs in through the web interface.
+   - Session-protected API requires authenticated access.
 
+2. **Natural Language Request**
+   - User submits a task and optional target server list.
+   - If servers are omitted, configured defaults are used.
 
-Blacklist rules for forbidden or dangerous commands
- This ensures that even if the LLM generates unsafe output, it will not be executed.
+3. **Input Security Validation**
+   - `SecurityLayer` checks unsafe patterns, suspicious phrasing, and policy violations.
 
+4. **Intent Routing (Built-in Safe Modes)**
+   - Safe Cron intent: list managed cron entries or schedule an archived script.
+   - Script Archive intent: list saved scripts, re-run a saved script, explain a saved script.
+   - Dangerous cron removal requests are blocked by policy.
 
-6. Remote Execution via SSH
-Validated commands are executed on one or multiple remote machines using SSH (Paramiko) with key-based or password authentication. The system supports both normal user and root-level execution, depending on configured permissions.
-7. Result Collection
-The execution output (standard output, standard error, and exit status) is collected and returned to the user through the web interface in a readable format.
+5. **Host Context Probe (Pre-LLM)**
+   - SSH probe collects OS info, running services, and listening ports per host.
+   - The system uses per-server identity/context (target host name plus detected OS/service state) to tailor command generation for each machine environment.
+   - This improves command relevance and lowers hallucination risk.
 
-Supported Command Types
-Simple Commands
-Examples include:
-Display active network connections
+6. **RAG Grounding**
+   - Retrieval pipeline adds trusted command examples to the LLM prompt when available.
 
- netstat -nlutp
+7. **LLM Generation**
+   - OpenAI-compatible API generates one command/script for per-host execution.
+   - Output is cleaned from markdown wrappers/backticks/prompts.
 
+8. **Command Validation**
+   - Whitelist, blacklist, and read-only policy checks enforce command safety.
+   - Command is normalized before execution.
 
-Check host availability
+9. **Remote Execution and Script Archiving**
+   - Commands execute via Paramiko SSH in parallel across servers.
+   - Multi-line scripts are saved to `$HOME/ShellSentryScripts` (configurable), then executed.
 
- ping 192.168.56.1
+10. **Result Formatting and AI Explanation**
+    - Returns raw output + human-friendly summary.
+    - Optional second LLM call explains technical report in plain language.
 
+11. **Audit Logging**
+    - Every execution path records metadata/results in `ExecutionLog`.
 
-Display network interfaces
+---
 
- ifconfig
+## 4) Key Implemented Features
 
+### A) Secure NL-to-Bash Execution
+- Natural language task input.
+- Host-aware command generation.
+- Multi-server parallel SSH execution.
+- Structured JSON responses with summaries and technical report.
 
-Display disk usage
+### B) Script Archive Lifecycle
+- Multi-line scripts are automatically saved remotely with timestamped names:
+  - `ShellSentry_YYYY-MM-DD_HH-MM-SS_nanoseconds.sh`
+- Saved under:
+  - `$HOME/<SCRIPT_ARCHIVE_DIR_NAME>` (default: `ShellSentryScripts`)
+- Built-in operations through natural language:
+  - list saved scripts (all/today/yesterday)
+  - re-execute saved script
+  - explain saved script content using LLM
 
- df -h
-
-
-Script-Based Commands
-Examples include:
-Checking active connections on multiple machines
-
-
-Performing database backups across all servers
-
-
-Executing system health monitoring scripts
-
-
-
-Security Considerations
-Given the cybersecurity focus of the project, several security mechanisms are implemented:
-User authentication and access control
-
-
-Input sanitization to prevent prompt injection
-
-
-LLM output validation (whitelist and blacklist)
-
-
-SSH key-based or password authentication (Paramiko)
-
-
-Controlled execution scope (user-level or root-level)
-
-
-Logging of user actions and executed commands
-
-
-
-Technologies Used
-Backend: Python (Flask)
-
-
-Frontend: Web-based interface (HTML/CSS/JavaScript templates)
-
-
-LLM: OpenAI-compatible APIs (OpenAI, Groq, Ollama, etc.)
-
-
-Remote Access: Paramiko (SSH)
-
-
-Operating System: Linux-based servers (remote targets)
-
-
-
-Project Scope
-Supports execution on single or multiple remote machines
-
-
-Handles both simple commands and complex scripts
-
-
-Focuses on secure translation and execution of commands
-
-
-Designed for educational and controlled environments
-
-
-
-Limitations
-The system depends on the accuracy of the LLM output
-
-
-Complex commands may require additional validation rules
-
-
-Not intended for unrestricted production environments
-
-
-Frontend design is not the primary focus
-
-
-
-Future Enhancements
-Role-based access control (RBAC)
-
-
-Command execution simulation mode
-
-
-Audit dashboard for security monitoring
-
-
-Support for additional scripting languages
-
-
-Integration with SIEM or monitoring tools
-
-
-
-Conclusion
-LLM-to-Bash demonstrates how large language models can be securely integrated into system administration workflows. By combining natural language processing, command validation, and secure remote execution, the project highlights both the power and risks of LLM-driven automation in cybersecurity contexts.
-
-
-1️⃣ System Architecture Diagram
-High-Level Architecture (Text Diagram)
-+---------------------+
-|        User         |
-| (Web Interface UI)  |
-+----------+----------+
-           |
-           | Natural Language Request
-           v
-+---------------------+
-|   Web Application   |
-|  (Python Backend)   |
-+----------+----------+
-           |
-           | Input Validation
-           v
-+---------------------+
-| Security Layer      |
-| - Prompt Sanitizer  |
-| - Policy Checker    |
-+----------+----------+
-           |
-           | Valid Request
-           v
-+---------------------+
-| LLM API (OpenAI-    |
-| compatible)         |
-| Natural Language → |
-| Bash Command/Script |
-+----------+----------+
-           |
-           | Generated Bash Output
-           v
-+---------------------+
-| Command Validation  |
-| - Whitelist         |
-| - Blacklist         |
-| - Permission Check  |
-+----------+----------+
-           |
-           | Approved Command
-           v
-+---------------------+
-| SSH Executor        |
-| (Paramiko)          |
-| Key/Password Auth   |
-+----------+----------+
-           |
-           | Execute Command
-           v
-+---------------------+
-| Remote Server(s)    |
-| Linux Machines      |
-+----------+----------+
-           |
-           | Execution Result
-           v
-+---------------------+
-| Result Collector    |
-+----------+----------+
-           |
-           | Output (STDOUT / STDERR)
-           v
-+---------------------+
-|        User         |
-|   Result Display    |
-+---------------------+
-
-
-Key Architecture Components Explained
-Web Interface: Accepts natural language input and displays execution results.
-
-
-Backend (Python): Orchestrates validation, LLM communication, and SSH execution.
-
-
-Security Layer: Prevents malicious input and prompt injection attacks.
-
-
-LLM API (LLaMA): Converts natural language into Bash commands or scripts.
-
-
-Command Validator: Ensures generated commands are safe and permitted.
-
-
-SSH Executor (Paramiko): Handles secure authentication (key or password) and remote execution.
-
-
-Remote Servers: Linux-based machines where commands are executed.
-
-
-
-2️⃣ Problem Statement
-Modern system administration and cybersecurity operations rely heavily on Bash commands for monitoring, diagnostics, and automation. However, executing these commands—especially across multiple remote machines—requires advanced command-line expertise and poses significant risks if commands are written incorrectly or executed without proper validation.
-With the emergence of Large Language Models (LLMs), it is now possible to translate natural language into executable commands. However, directly allowing LLM-generated commands to run on remote systems introduces serious security concerns, including command injection, privilege abuse, and unintended destructive actions.
-Currently, there is a lack of secure frameworks that combine natural language interfaces with controlled, validated, and auditable remote command execution. This gap presents both a usability challenge and a cybersecurity risk.
-
-3️⃣ Project Objectives
-Primary Objective
-To design and implement a secure web-based system that translates natural language requests into Bash commands using a Large Language Model and executes them safely on remote machines.
-
-Specific Objectives
-Natural Language Processing
-
-
-Enable users to describe system tasks using plain English.
-
-
-Translate user requests into Bash commands or scripts using an LLM (OpenAI-compatible API).
-
-
-Security & Validation
-
-
-Detect and block malicious or unsafe user inputs.
-
-
-Validate LLM-generated commands using whitelist and blacklist mechanisms.
-
-
-Enforce permission levels (user or root access).
-
-
-Secure Remote Execution
-
-
-Execute validated commands on one or multiple remote servers.
-
-
-Use SSH agent-based authentication to ensure secure access.
-
-
-Result Handling
-
-
-Capture execution outputs and errors.
-
-
-Return results to the user in a clear and readable format.
-
-
-Cybersecurity Focus
-
-
-Demonstrate secure integration of AI systems with critical infrastructure.
-
-
-Highlight risks and mitigation strategies associated with LLM-driven automation.
-
-
-Educational Value
-
-
-Apply concepts from cybersecurity, networking, Linux systems, and AI.
-
-
-Provide a practical demonstration of secure AI-assisted system administration.
+### C) Safe Re-execution of Saved Scripts
+- Script filename format is strictly validated (`*.sh` safe basename only).
+- Script existence is checked per selected server.
+- Script content is re-validated against current security policy before re-run.
+- This prevents executing archived scripts that become non-compliant or tampered.
+
+### D) Safe Cron Mode (Managed Scheduling)
+- Detects cron-related user intent.
+- Allows:
+  - list only ShellSentry-managed cron entries
+  - schedule/update a managed cron entry for a saved script
+- Blocks:
+  - destructive cron actions (clear/remove/wipe crontab)
+- Adds managed tag marker:
+  - `# ShellSentryManaged:<script_name>` (prefix configurable)
+
+### E) Reliability and UX Hardening
+- Fast pre-flight SSH reachability check (port 22).
+- Parallel server operations to avoid one host blocking others.
+- Retry/backoff for LLM API timeouts and rate limits (HTTP 429).
+- Friendly natural-language error summaries.
+- Optional AI explanation panel for report/script output.
+
+---
+
+## 5) Security Model
+
+ShellSentry applies multiple defensive layers:
+
+1. User authentication and protected endpoints.
+2. Input sanitization and intent-level checks.
+3. LLM prompt constraints + cleaned output.
+4. Command whitelist/blacklist and restricted patterns.
+5. Read-only mode (enabled by default).
+6. Script re-validation before archive re-execution.
+7. Managed-only cron scheduling boundaries.
+8. Execution logging to database and file/console logs.
+
+---
+
+## 6) Technology Stack
+
+- **Backend:** Python, Flask, Flask-Login, Flask-SQLAlchemy
+- **LLM integration:** OpenAI-compatible `chat/completions` API via `requests`
+- **SSH execution:** Paramiko
+- **Retrieval:** `sentence-transformers` + `faiss-cpu`
+- **Frontend:** Jinja templates + HTML/CSS + Vanilla JavaScript
+- **Targets:** Linux remote servers
+
+---
+
+## 7) High-Level Architecture
+
+```text
+User (Dashboard)
+   -> Flask API (/api/execute)
+   -> Security validation + intent detection
+   -> (A) Safe Cron / Script-Archive built-in action
+      OR
+   -> (B) Host probe -> RAG retrieval -> LLM generate -> command validation
+   -> SSH parallel executor (Paramiko)
+   -> Result formatter + optional LLM explanation
+   -> JSON response + UI rendering + DB audit log
+```
+
+---
+
+## 8) Scope and Current Limitations
+
+- Intended for educational/lab/controlled environments.
+- Security policies reduce risk but cannot eliminate all LLM-related edge cases.
+- Command whitelist is broad and may need narrowing for strict deployments.
+- Not a full production hardening package (RBAC/secrets/SIEM/deployment controls should be added externally).
+- Validation environment was expanded by adding a Kali Linux server as an additional target to confirm multi-server execution behavior across different Linux distributions.
+
+---
+
+## 9) Realistic Future Enhancements
+
+- Role-based access control and command policy per role.
+- Dry-run/simulation mode before real execution.
+- Stronger script integrity (e.g., hashing/signature checks).
+- Rich audit dashboard and SIEM integration.
+- Extended support for additional automation targets and script types.
+
+---
+
+## 10) Conclusion
+
+ShellSentry demonstrates a practical and security-aware approach to AI-assisted system administration. Beyond NL-to-command translation, the implemented architecture now covers host-aware generation, script archival/reuse, safe managed cron scheduling, policy-gated re-execution, and auditable multi-host execution.
 

@@ -3,6 +3,7 @@ import os
 import socket
 import re
 import concurrent.futures
+from datetime import datetime, timedelta
 from .logger import setup_logger
 from .config import Config
 from .models import db, ExecutionLog
@@ -463,16 +464,25 @@ class SSHExecutor:
             return False
         return re.fullmatch(r'[A-Za-z0-9._-]+\.sh', script_name) is not None
 
-    def list_saved_scripts(self, servers, username, user_id=None, original_request='', date_scope='all'):
+    def list_saved_scripts(
+        self,
+        servers,
+        username,
+        user_id=None,
+        original_request='',
+        date_scope='all',
+        list_day_start=None,
+    ):
         """
         List saved ShellSentry scripts from the fixed archive folder on each server.
-        date_scope: all|today|yesterday
+        date_scope: all | today | yesterday | day
+        When date_scope is 'day', list_day_start must be YYYY-MM-DD (mtime filtered via GNU find -newermt).
         """
         if not servers:
             return {'error': 'No servers specified'}
 
         date_scope = (date_scope or 'all').strip().lower()
-        if date_scope not in ('all', 'today', 'yesterday'):
+        if date_scope not in ('all', 'today', 'yesterday', 'day'):
             date_scope = 'all'
 
         find_filter = ''
@@ -480,6 +490,20 @@ class SSHExecutor:
             find_filter = '-daystart -mtime 0'
         elif date_scope == 'yesterday':
             find_filter = '-daystart -mtime 1'
+        elif date_scope == 'day' and list_day_start:
+            if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', str(list_day_start).strip()):
+                date_scope = 'all'
+            else:
+                day_s = str(list_day_start).strip()
+                try:
+                    d = datetime.strptime(day_s, '%Y-%m-%d').date()
+                    end_s = (d + timedelta(days=1)).strftime('%Y-%m-%d')
+                    find_filter = (
+                        f'-newermt "{day_s} 00:00:00" ! -newermt "{end_s} 00:00:00"'
+                    )
+                except ValueError:
+                    date_scope = 'all'
+                    find_filter = ''
 
         archive_dir = f"$HOME/{self.script_archive_dir_name}"
         list_cmd = (
