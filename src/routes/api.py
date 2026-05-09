@@ -1,12 +1,8 @@
 from flask import request, jsonify
 from flask_login import login_required, current_user
 
-from ..intents import (
-    detect_archive_intent,
-    detect_safe_cron_intent,
-    is_safe_cron_expr,
-    safe_text_for_log,
-)
+from ..execution_router import resolve_execute_route, validate_schedule_inputs
+from ..intents import safe_text_for_log
 from ..result_formatter import format_execution_payload, format_error_summary
 from ..services import (
     command_validator,
@@ -65,8 +61,9 @@ def register_api_routes(app):
                     ),
                 }), 400
 
-            cron_intent = detect_safe_cron_intent(natural_language)
-            if cron_intent.get('action') == 'blocked_remove':
+            resolved = resolve_execute_route(natural_language, llm_client)
+
+            if resolved.cron_blocked:
                 return jsonify({
                     'error': 'Cron removal is blocked in Safe Cron Mode',
                     'natural_language_summary': format_error_summary(
@@ -75,7 +72,16 @@ def register_api_routes(app):
                     ),
                 }), 400
 
-            if cron_intent.get('action') == 'list':
+            if resolved.archive_forbidden:
+                return jsonify({
+                    'error': 'Archived script change blocked',
+                    'natural_language_summary': format_error_summary(
+                        'Changing, deleting, or editing saved archive scripts is not allowed.',
+                        details='You can list, re-run, or explain saved scripts; use Safe Cron only for scheduling.',
+                    ),
+                }), 400
+
+            if resolved.cron_action == 'list':
                 execution_results = ssh_executor.list_managed_cron_entries(
                     target_servers,
                     current_user.username,
@@ -95,9 +101,10 @@ def register_api_routes(app):
                     "results": execution_results,
                     "natural_language_summary": formatted["natural_language_summary"],
                     "formatted_report": formatted["formatted_report"],
+                    "intent_route_source": resolved.source,
                 })
 
-            if cron_intent.get('action') == 'schedule':
+            if resolved.cron_action == 'schedule':
                 if not app.config.get('SAFE_CRON_MODE', True):
                     return jsonify({
                         'error': 'Safe Cron Mode is disabled',
@@ -106,15 +113,16 @@ def register_api_routes(app):
                         ),
                     }), 400
 
-                script_name = cron_intent.get('script_name')
-                cron_expr = cron_intent.get('cron_expr')
-                if not is_safe_cron_expr(cron_expr):
+                script_name = resolved.script_name
+                cron_expr = resolved.cron_expr
+                sched_ok, sched_reason = validate_schedule_inputs(script_name, cron_expr)
+                if not sched_ok:
                     return jsonify({
-                        'error': 'Invalid cron expression',
-                        'details': 'Use 5-field cron format like "0 2 * * *" or @daily',
+                        'error': 'Invalid schedule request',
+                        'details': sched_reason,
                         'natural_language_summary': format_error_summary(
-                            'Cron expression is invalid.',
-                            details='Use five fields (minute hour day month weekday) or @daily.',
+                            'Could not schedule: missing script name or invalid cron expression.',
+                            details=sched_reason,
                         ),
                     }), 400
 
@@ -155,12 +163,12 @@ def register_api_routes(app):
                 }
                 if servers_missing_script:
                     payload["missing_script_servers"] = servers_missing_script
+                payload["intent_route_source"] = resolved.source
                 return jsonify(payload)
 
-            archive_intent = detect_archive_intent(natural_language)
-            if archive_intent.get('action') == 'list':
-                date_scope = archive_intent.get('date_scope', 'all')
-                list_day_start = archive_intent.get('list_day_start')
+            if resolved.archive_action == 'list':
+                date_scope = resolved.date_scope or 'all'
+                list_day_start = resolved.list_day_start
                 execution_results = ssh_executor.list_saved_scripts(
                     target_servers,
                     current_user.username,
@@ -186,10 +194,11 @@ def register_api_routes(app):
                     "results": execution_results,
                     "natural_language_summary": formatted["natural_language_summary"],
                     "formatted_report": formatted["formatted_report"],
+                    "intent_route_source": resolved.source,
                 })
 
-            if archive_intent.get('action') == 'rerun':
-                script_name = archive_intent.get('script_name')
+            if resolved.archive_action == 'rerun':
+                script_name = resolved.script_name
                 if not script_name:
                     return jsonify({
                         'error': 'Script name is required',
@@ -275,10 +284,11 @@ def register_api_routes(app):
                     payload["missing_script_servers"] = servers_missing_script
                 if script_explanation:
                     payload["script_explanation"] = script_explanation
+                payload["intent_route_source"] = resolved.source
                 return jsonify(payload)
 
-            if archive_intent.get('action') == 'explain':
-                script_name = archive_intent.get('script_name')
+            if resolved.archive_action == 'explain':
+                script_name = resolved.script_name
                 if not script_name:
                     return jsonify({
                         'error': 'Script name is required',
@@ -324,6 +334,7 @@ def register_api_routes(app):
                     ),
                     "formatted_report": script_search.get('content', ''),
                     "script_explanation": exp.get('explanation', '').strip(),
+                    "intent_route_source": resolved.source,
                 })
 
             host_context = ssh_executor.probe_host_context(target_servers)
@@ -339,6 +350,7 @@ def register_api_routes(app):
                 natural_language,
                 remote_host_context=host_context,
                 rag_context_text=rag_context_text,
+                execution_style=resolved.execution_style,
             )
 
             if not llm_response['success']:
@@ -410,6 +422,8 @@ def register_api_routes(app):
                 "natural_language_summary": formatted["natural_language_summary"],
                 "formatted_report": formatted["formatted_report"],
                 "ai_report_explanation": ai_explain,
+                "intent_route_source": resolved.source,
+                "execution_style_hint": resolved.execution_style,
             }
             if not ai_explain:
                 payload["ai_report_explanation_error"] = (

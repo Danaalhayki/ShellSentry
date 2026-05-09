@@ -9,6 +9,25 @@ from .config import Config
 logger = setup_logger()
 
 
+def _extract_json_object(text: str) -> Optional[dict]:
+    """Parse first JSON object from model output (allows ```json fences)."""
+    if not text or not str(text).strip():
+        return None
+    raw = str(text).strip()
+    raw = raw.replace("```json", "").replace("```", "").strip()
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        pass
+    m = re.search(r"\{[\s\S]*\}", raw)
+    if m:
+        try:
+            return json.loads(m.group(0))
+        except json.JSONDecodeError:
+            pass
+    return None
+
+
 def _retry_after_seconds(response) -> Optional[int]:
     """Parse Retry-After header (seconds) if present and sane."""
     raw = (response.headers or {}).get("Retry-After")
@@ -32,6 +51,110 @@ class LLMClient:
         self.model = Config.LLM_MODEL
         self.api_type = Config.LLM_API_TYPE
     
+    def classify_execution_route(self, user_text: str):
+        """
+        Ask the LLM to classify the request into ShellSentry routes.
+        Returns dict: success, route, script_name, cron_expression, date_scope,
+        calendar_day, execution_style, error.
+
+        Backend still enforces policy; regex fallback runs if this fails.
+        """
+        if not self.api_key:
+            return {
+                "success": False,
+                "route": None,
+                "error": "LLM API key not configured",
+            }
+
+        system_prompt = """You classify user requests for ShellSentry, a tool that runs Bash on remote Linux servers over SSH.
+
+Return ONE JSON object only (no markdown, no prose). Keys:
+- "route": one of:
+  - "cron_list" — user wants to VIEW ShellSentry-managed cron lines only (safe list).
+  - "cron_schedule" — user wants to SCHEDULE or UPDATE a recurring job for an EXISTING saved script file (*.sh) in their home archive using cron syntax or macros (@daily, etc.).
+  - "cron_forbidden" — user wants to DELETE, CLEAR, WIPE, or REMOVE crontab/cron entries (destructive). Never allow these through.
+  - "archive_list" — user wants to LIST saved ShellSentry archive scripts (optionally today/yesterday/specific day).
+  - "archive_rerun" — user wants to RUN AGAIN an existing saved *.sh from the archive.
+  - "archive_explain" — user wants an EXPLANATION of what a saved *.sh script does.
+  - "archive_forbidden" — user wants to DELETE, EDIT, APPEND, RENAME, MOVE, or OTHERWISE MODIFY archived scripts or replace crontab lines outside managed scheduling. Block these.
+  - "normal_command" — ordinary one-line or simple inspection command (disk, network, processes, etc.) — not cron/archive workflow.
+  - "script_command" — user needs a multi-line Bash script or non-trivial script block generated and run (still subject to server validation).
+  - "unclear" — cannot tell; the app will use keyword fallback.
+
+Optional keys (use null if unknown):
+- "script_name": basename like "ShellSentry_2026-01-01_12-00-00_123456789.sh" if mentioned or inferable.
+- "cron_expression": 5-field cron or allowed macro (@daily, @hourly, …) if scheduling.
+- "date_scope": "all" | "today" | "yesterday" | "day" (for archive_list).
+- "calendar_day": "YYYY-MM-DD" when listing scripts for one calendar day.
+
+Rules you MUST follow when choosing route:
+1) Cron: Only "cron_list" or "cron_schedule" are allowed for cron topics. Any destructive crontab edit intent → "cron_forbidden".
+2) Scheduling must reference an existing archived script name (*.sh). Do not invent filenames.
+3) Saved scripts: ONLY list, rerun, explain are allowed workflows. Any delete/modify/archive tampering → "archive_forbidden".
+4) Typos and informal language: infer intent (e.g. "chrontab", "corn job") toward the correct route when obvious.
+5) If the user mixes topics, prefer the SAFEST primary intent (if destructive cron → cron_forbidden).
+
+Output valid JSON only."""
+
+        user_prompt = f"User request:\n{user_text.strip()}"
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": 0.1,
+            "max_tokens": 350,
+        }
+
+        try:
+            response = requests.post(
+                f"{self.api_base}/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=45,
+            )
+            if response.status_code != 200:
+                err = response.text[:300]
+                try:
+                    err = response.json().get("error", {}).get("message", err)
+                except Exception:
+                    pass
+                return {"success": False, "route": None, "error": err}
+
+            data = response.json()
+            content = data["choices"][0]["message"]["content"].strip()
+            parsed = _extract_json_object(content)
+            if not parsed or not isinstance(parsed, dict):
+                return {
+                    "success": False,
+                    "route": None,
+                    "error": "Classifier did not return valid JSON",
+                }
+
+            route = parsed.get("route")
+            if isinstance(route, str):
+                route = route.strip().lower()
+
+            return {
+                "success": True,
+                "route": route or "unclear",
+                "script_name": parsed.get("script_name"),
+                "cron_expression": parsed.get("cron_expression"),
+                "date_scope": parsed.get("date_scope"),
+                "calendar_day": parsed.get("calendar_day"),
+                "execution_style": parsed.get("execution_style"),
+                "error": "",
+            }
+        except Exception as e:
+            logger.error(f"classify_execution_route: {e}", exc_info=True)
+            return {"success": False, "route": None, "error": str(e)}
+
     def _format_remote_host_context(self, host_context):
         """Turn per-host probe (OS, running services, listeners) into text for the LLM."""
         if not host_context:
@@ -79,6 +202,7 @@ class LLMClient:
         natural_language_input,
         remote_host_context=None,
         rag_context_text: str = "",
+        execution_style: str = "auto",
     ):
         """
         Generate Bash command from natural language input
@@ -97,10 +221,29 @@ class LLMClient:
                 'success': False,
                 'error': 'LLM API key not configured'
             }
-        
-        # Create system prompt
-        system_prompt = """You are a secure Bash command generator. Your task is to convert natural language requests into safe, single-line Bash commands or simple multi-line scripts.
 
+        style = (execution_style or "auto").strip().lower()
+        if style not in ("auto", "single", "multi"):
+            style = "auto"
+
+        style_hint = ""
+        if style == "single":
+            style_hint = (
+                "\nOutput preference: prefer a SINGLE LINE shell command when possible.\n"
+            )
+        elif style == "multi":
+            style_hint = (
+                "\nOutput preference: the user needs a SMALL MULTI-LINE Bash script "
+                "(use \\n between lines). Keep it minimal and safe; no interactive prompts.\n"
+            )
+
+        # Create system prompt
+        system_prompt = f"""You are a secure Bash command generator for ShellSentry. You convert natural language into commands/scripts that run on REMOTE Linux hosts over SSH.
+
+Context the app handles elsewhere (do NOT try to fulfill these as shell commands):
+- Listing/scheduling managed cron for saved archive scripts, crontab edits, or saved-script list/rerun/explain — those use dedicated app flows. If the user text still reached you, treat it as a normal command ONLY when they clearly ask for immediate execution output (e.g. "show disk usage now").
+
+{style_hint}
 Rules:
 1. Generate ONLY the Bash command/script, no explanations
 2. Use safe commands only (no rm -rf, format, etc.)
