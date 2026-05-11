@@ -2,6 +2,7 @@ import paramiko
 import os
 import socket
 import re
+import base64
 import concurrent.futures
 from datetime import datetime, timedelta
 from .logger import setup_logger
@@ -36,6 +37,51 @@ class SSHExecutor:
         self.script_archive_dir_name = Config.SCRIPT_ARCHIVE_DIR_NAME
         self.script_archive_max_list = Config.SCRIPT_ARCHIVE_MAX_LIST
         self.safe_cron_tag_prefix = Config.SAFE_CRON_TAG_PREFIX
+
+    def _resolve_server_password(self, server):
+        """
+        Return the SSH password used to authenticate to `server`.
+
+        This is the same password we reuse as the sudo password so the user
+        does not have to manage a separate sudo secret: whatever was set in
+        SERVER_CREDENTIALS for that host (or SSH_PASSWORD as a fallback) is
+        forwarded to sudo via SUDO_ASKPASS.
+        """
+        if server in self.server_credentials:
+            return self.server_credentials[server].get('password') or ''
+        return self.ssh_password or ''
+
+    @staticmethod
+    def _command_uses_sudo(command):
+        """Return True when the command string contains a `sudo` invocation."""
+        if not command:
+            return False
+        return re.search(r'\bsudo\b', command) is not None
+
+    @staticmethod
+    def _build_sudo_askpass_preamble(password):
+        """
+        Build a one-shot bash preamble that wires up a SUDO_ASKPASS helper
+        using `password`. After it runs, any `sudo` invocation in the same
+        shell (or any bash child of it) authenticates non-interactively, so
+        the "sudo: a terminal is required to read the password" error no
+        longer occurs over a TTY-less SSH session.
+
+        The password is base64-encoded so it does not appear in plaintext in
+        process listings, and the helper file is removed when the shell exits.
+        """
+        if not password:
+            return ''
+        encoded = base64.b64encode(password.encode('utf-8')).decode('ascii')
+        return (
+            "SHELLSENTRY_ASKPASS=\"$(mktemp)\"; "
+            f"printf '#!/bin/sh\\necho \"%s\" | base64 -d\\n' '{encoded}' > \"$SHELLSENTRY_ASKPASS\"; "
+            "chmod 700 \"$SHELLSENTRY_ASKPASS\"; "
+            "export SUDO_ASKPASS=\"$SHELLSENTRY_ASKPASS\"; "
+            "sudo() { command sudo -A \"$@\"; }; "
+            "export -f sudo; "
+            "trap 'rm -f \"$SHELLSENTRY_ASKPASS\"' EXIT;"
+        )
 
     @staticmethod
     def _is_port_reachable(server, port=22, timeout=PORT_REACHABILITY_TIMEOUT):
@@ -370,13 +416,29 @@ class SSHExecutor:
                     'exit_code': connect_error.get('exit_code', -1)
                 }
             
+            # When root execution is permitted, set up a SUDO_ASKPASS helper
+            # that reuses this server's SSH password. Without it, `sudo` over a
+            # TTY-less SSH session fails with "a terminal is required to read
+            # the password". We inject this even for commands that don't look
+            # like they call sudo directly (e.g. running a saved script) so the
+            # behavior is consistent across all execution paths.
+            sudo_preamble = ''
+            if Config.ALLOW_ROOT_EXECUTION:
+                server_password = self._resolve_server_password(server)
+                if server_password:
+                    sudo_preamble = self._build_sudo_askpass_preamble(server_password)
+
             # Execute command with increased timeout.
             # For multi-line scripts, persist a copy on the remote host for auditing/reuse,
             # then execute that saved file.
             if '\n' in command:
                 wrapper_marker = 'SHELLSENTRY_WRAPPER_EOF'
                 script_marker = 'SHELLSENTRY_SCRIPT_EOF'
-                command = (
+                # The user's script body is saved verbatim so the archive on
+                # disk never contains the sudo password. The askpass helper is
+                # created in the outer wrapper and is inherited (via env vars
+                # and `export -f sudo`) by the bash that runs the saved script.
+                outer_wrapper = (
                     f"SHELLSENTRY_SCRIPT_DIR=\"$HOME/{self.script_archive_dir_name}\"\n"
                     f"mkdir -p \"$SHELLSENTRY_SCRIPT_DIR\"\n"
                     f"SHELLSENTRY_SCRIPT_PATH=\"$SHELLSENTRY_SCRIPT_DIR/ShellSentry_$(date +%Y-%m-%d_%H-%M-%S_%N).sh\"\n"
@@ -387,7 +449,11 @@ class SSHExecutor:
                     f"bash \"$SHELLSENTRY_SCRIPT_PATH\"\n"
                     f"echo \"[ShellSentry] Script saved to: $SHELLSENTRY_SCRIPT_PATH\"\n"
                 )
-                command = f"bash -s << '{wrapper_marker}'\n{command}\n{wrapper_marker}"
+                if sudo_preamble:
+                    outer_wrapper = f"{sudo_preamble}\n{outer_wrapper}"
+                command = f"bash -s << '{wrapper_marker}'\n{outer_wrapper}\n{wrapper_marker}"
+            elif sudo_preamble:
+                command = f"{sudo_preamble} {command}"
             stdin, stdout, stderr = ssh.exec_command(command, timeout=60)
             
             # Wait for command to complete
