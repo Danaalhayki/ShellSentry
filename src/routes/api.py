@@ -2,7 +2,7 @@ from flask import request, jsonify
 from flask_login import login_required, current_user
 
 from ..execution_router import resolve_execute_route, validate_schedule_inputs
-from ..intents import safe_text_for_log
+from ..intents import is_minimal_filename_only, safe_text_for_log
 from ..result_formatter import format_execution_payload, format_error_summary
 from ..services import (
     command_validator,
@@ -45,6 +45,18 @@ def register_api_routes(app):
                     'natural_language_summary': format_error_summary(
                         'We could not use that wording for safety reasons',
                         validation_result['reason'],
+                    ),
+                }), 400
+
+            if is_minimal_filename_only(natural_language):
+                unclear = 'ERROR: Request unclear or potentially unsafe'
+                return jsonify({
+                    'error': 'Command validation failed',
+                    'reason': unclear,
+                    'generated_command': unclear,
+                    'natural_language_summary': format_error_summary(
+                        'That command is not allowed to run on your servers',
+                        unclear,
                     ),
                 }), 400
 

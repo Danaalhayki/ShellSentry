@@ -93,6 +93,7 @@ Rules you MUST follow when choosing route:
 3) Saved scripts: ONLY list, rerun, explain are allowed workflows. Any delete/modify/archive tampering → "archive_forbidden".
 4) Typos and informal language: infer intent (e.g. "chrontab", "corn job") toward the correct route when obvious.
 5) If the user mixes topics, prefer the SAFEST primary intent (if destructive cron → cron_forbidden).
+6) Input that is ONLY a bare filename (e.g. dana.txt, notes.log) with no verbs like list/show/run/schedule → "unclear", NOT archive_list.
 
 Output valid JSON only."""
 

@@ -17,6 +17,7 @@ from .intents import (
     extract_cron_expression,
     extract_list_calendar_day,
     extract_script_name,
+    is_minimal_filename_only,
     is_safe_cron_expr,
 )
 
@@ -38,6 +39,38 @@ class ResolvedExecuteRoute:
     list_day_start: Optional[str] = None
     execution_style: str = "auto"  # 'auto' | 'single' | 'multi'
     source: str = "regex"  # 'llm' | 'regex' | 'llm+regex'
+
+
+# LLM classifier can misread bare filenames (e.g. dana.txt) as "list archive scripts".
+_LLM_WORKFLOW_ROUTES = frozenset({
+    "cron_list",
+    "cron_schedule",
+    "archive_list",
+    "archive_rerun",
+    "archive_explain",
+})
+
+
+def _llm_workflow_route_trusted(nl: str, route: str, arc_r: dict, cron_r: dict) -> bool:
+    """
+    Allow LLM cron/archive routes only when local regex agrees, except forbidden routes.
+    Bare filenames never trigger archive/cron workflows from the LLM alone.
+    """
+    if route not in _LLM_WORKFLOW_ROUTES:
+        return True
+    if is_minimal_filename_only(nl):
+        return False
+    if route == "cron_list":
+        return cron_r.get("action") == "list"
+    if route == "cron_schedule":
+        return cron_r.get("action") == "schedule"
+    if route == "archive_list":
+        return arc_r.get("action") == "list"
+    if route == "archive_rerun":
+        return arc_r.get("action") == "rerun"
+    if route == "archive_explain":
+        return arc_r.get("action") == "explain"
+    return False
 
 
 def resolve_execute_route(natural_language: str, llm_client: "LLMClient") -> ResolvedExecuteRoute:
@@ -63,13 +96,18 @@ def resolve_execute_route(natural_language: str, llm_client: "LLMClient") -> Res
         if route == "archive_forbidden":
             return ResolvedExecuteRoute(archive_forbidden=True, source=src)
 
-        script_name = _norm_script(llm.get("script_name")) or extract_script_name(nl)
-        cron_expr = _norm_cron(llm.get("cron_expression")) or extract_cron_expression(nl)
+        if not _llm_workflow_route_trusted(nl, route, arc_r, cron_r):
+            route = "unclear"
+        else:
+            script_name = _norm_script(llm.get("script_name")) or extract_script_name(nl)
+            cron_expr = _norm_cron(llm.get("cron_expression")) or extract_cron_expression(nl)
 
-        if route == "cron_list":
+        if route == "unclear":
+            pass
+        elif route == "cron_list":
             return ResolvedExecuteRoute(cron_action="list", source=src)
 
-        if route == "cron_schedule":
+        elif route == "cron_schedule":
             return ResolvedExecuteRoute(
                 cron_action="schedule",
                 script_name=script_name,
@@ -77,8 +115,8 @@ def resolve_execute_route(natural_language: str, llm_client: "LLMClient") -> Res
                 source=src,
             )
 
-        ds, day = _date_scope_from_llm(llm, arc_r, nl)
-        if route == "archive_list":
+        elif route == "archive_list":
+            ds, day = _date_scope_from_llm(llm, arc_r, nl)
             return ResolvedExecuteRoute(
                 archive_action="list",
                 date_scope=ds,
@@ -87,24 +125,24 @@ def resolve_execute_route(natural_language: str, llm_client: "LLMClient") -> Res
                 source=src,
             )
 
-        if route == "archive_rerun":
+        elif route == "archive_rerun":
             return ResolvedExecuteRoute(
                 archive_action="rerun",
                 script_name=script_name,
                 source=src,
             )
 
-        if route == "archive_explain":
+        elif route == "archive_explain":
             return ResolvedExecuteRoute(
                 archive_action="explain",
                 script_name=script_name,
                 source=src,
             )
 
-        if route == "script_command":
+        elif route == "script_command":
             return ResolvedExecuteRoute(execution_style="multi", source=src)
 
-        if route == "normal_command":
+        elif route == "normal_command":
             return ResolvedExecuteRoute(execution_style="single", source=src)
 
         # unclear (or unknown route) → fall through to regex merge below

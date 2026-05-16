@@ -165,6 +165,27 @@ def extract_list_calendar_day(text: Optional[str]) -> Optional[str]:
     return None
 
 
+def is_minimal_filename_only(text: Optional[str]) -> bool:
+    """
+    True when the user typed essentially just a filename (no real command intent).
+    Examples: dana.txt, jojo.txt, ShellSentry_2026-01-01_12-00-00_1.sh
+    """
+    t = normalize_intent_text(text).strip()
+    if not t:
+        return False
+    return re.fullmatch(r'[A-Za-z0-9._-]+\.[A-Za-z0-9]+', t, re.IGNORECASE) is not None
+
+
+def _needle_in_text(haystack: str, needle: str) -> bool:
+    """Match list words; short tokens like 'ls' use word boundaries (not pulse.txt)."""
+    n = (needle or '').strip().lower()
+    if not n:
+        return False
+    if len(n) <= 3:
+        return re.search(rf'\b{re.escape(n)}\b', haystack, re.IGNORECASE) is not None
+    return n in haystack
+
+
 def detect_archive_intent(text):
     """
     Detect explicit script-archive actions from natural language.
@@ -184,7 +205,7 @@ def detect_archive_intent(text):
     today_words = arc.get('scope_today_words') or ()
 
     def _any_substring(haystack: str, needles):
-        return any(n in haystack for n in needles)
+        return any(_needle_in_text(haystack, n) for n in needles)
 
     has_script_word = _any_substring(low, script_words)
     archive_hint = _any_substring(low, archive_hints)
