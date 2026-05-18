@@ -255,7 +255,8 @@ Rules:
 7. When remote host context is provided (OS, running services, listening ports), prefer command-line flags, paths, and tools that match that environment; if a service (e.g. nginx, sshd) is visible in the snapshot, prefer inspecting that stack when the user asks about services or ports
 8. Output raw shell only: never wrap the command in backticks (`) or markdown.
 9. The app already runs your command on the target host via SSH. Never use `ssh`, `scp`, or `rsync` in the command (read-only mode blocks them). The only exception is if the user explicitly needs to jump from the remote to another host.
-10. If trusted grounding examples are provided, prefer commands and patterns from them unless there is a strong reason not to.
+10. Saved archive scripts live under $HOME/ShellSentryScripts/. To read one, use the full path, e.g. cat "$HOME/ShellSentryScripts/ShellSentry_2026-01-01_12-00-00_1.sh" — not only the basename from another directory.
+11. If trusted grounding examples are provided, prefer commands and patterns from them unless there is a strong reason not to.
 
 Examples:
 - "Show active connections" -> "netstat -nlutp"

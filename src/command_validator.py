@@ -442,6 +442,42 @@ class CommandValidator:
             result = pattern.sub('', result)
         return result.strip()
 
+    def _expand_shellsentry_archive_paths(self, command: str) -> str:
+        """
+        Archive scripts live under $HOME/<SCRIPT_ARCHIVE_DIR_NAME>/.
+        LLM often emits `cat ShellSentry_....sh` which runs from SSH login dir (~) and
+        reads the wrong file or misses the archive copy. Rewrite to the archive path.
+        """
+        if not command or not command.strip():
+            return command
+        archive = (Config.SCRIPT_ARCHIVE_DIR_NAME or 'ShellSentryScripts').strip()
+        if f'/{archive}/' in command or f'"{archive}/' in command:
+            return command
+
+        parts = command.strip().split(None, 1)
+        if not parts:
+            return command
+        verb = parts[0].lower()
+        if verb not in ('cat', 'head', 'tail', 'less', 'more'):
+            return command
+
+        rest = parts[1] if len(parts) > 1 else ''
+        m = re.search(r'\b(ShellSentry_[A-Za-z0-9._-]+\.sh)\b', rest)
+        if not m:
+            return command
+
+        name = m.group(1)
+        quoted = f'"$HOME/{archive}/{name}"'
+        new_rest = rest[: m.start()] + quoted + rest[m.end() :]
+        expanded = f'{parts[0]} {new_rest}'.strip()
+        if expanded != command.strip():
+            logger.info(
+                "Expanded archive script path for execution: %s -> %s",
+                command.strip()[:120],
+                expanded[:120],
+            )
+        return expanded
+
     def normalize_for_execution(self, command):
         """
         Return a command with shebang lines removed and surrounding quotes stripped,
@@ -456,6 +492,7 @@ class CommandValidator:
         c = command.strip()
         if len(c) >= 2 and ((c[0] == '"' and c[-1] == '"') or (c[0] == "'" and c[-1] == "'")):
             command = c[1:-1]
+        command = self._expand_shellsentry_archive_paths(command)
         return command
 
     def _get_shell_control_keywords(self):
